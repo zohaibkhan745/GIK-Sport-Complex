@@ -1,0 +1,510 @@
+{
+  "facilities": [
+    {
+      "id": "padel-court-1",
+      "name": "GIKI Glass Padel Arena (Court 1)",
+      "category": "Racquet",
+      "description": "State-of-the-art panoramic tempered glass court with high-grade synthetic turf and anti-glare LED tournament lighting.",
+      "location": "Sports Complex, Outdoor Arena North",
+      "maxPlayers": 4,
+      "studentTimings": "06:00 AM - 11:00 AM \u0026 04:00 PM - 11:00 PM",
+      "facultyTimings": "05:00 PM - 07:00 PM (Reserved Priority Slot)",
+      "slots": [
+        "06:00 - 07:00",
+        "07:00 - 08:00",
+        "08:00 - 09:00",
+        "09:00 - 10:00",
+        "10:00 - 11:00",
+        "15:00 - 16:00",
+        "16:00 - 17:00",
+        "17:00 - 18:00",
+        "18:00 - 19:00",
+        "19:00 - 20:00",
+        "20:00 - 21:00",
+        "21:00 - 22:00",
+        "22:00 - 23:00"
+      ],
+      "rules": [
+        "Non-marking turf shoes mandatory",
+        "Max 4 players per match",
+        "Racquet safety leash required"
+      ],
+      "equipmentAvailable": [
+        "Babolat Padel Racket",
+        "Pro Padel Balls (Can of 3)",
+        "Wrist Wraps"
+      ],
+      "image": "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
+      "badge": "Most Popular",
+      "isMembershipRequired": false
+    },
+    {
+      "id": "padel-court-2",
+      "name": "GIKI Glass Padel Arena (Court 2)",
+      "category": "Racquet",
+      "description": "Tournament standard court configured for doubles \u0026 singles match play with spectator seating deck.",
+      "location": "Sports Complex, Outdoor Arena North",
+      "maxPlayers": 4,
+      "studentTimings": "06:00 AM - 11:00 AM \u0026 04:00 PM - 11:00 PM",
+      "facultyTimings": "06:00 PM - 08:00 PM (Reserved Priority Slot)",
+      "slots": [
+        "06:00 - 07:00",
+        "07:00 - 08:00",
+        "08:00 - 09:00",
+        "09:00 - 10:00",
+        "10:00 - 11:00",
+        "15:00 - 16:00",
+        "16:00 - 17:00",
+        "17:00 - 18:00",
+        "18:00 - 19:00",
+        "19:00 - 20:00",
+        "20:00 - 21:00",
+        "21:00 - 22:00",
+        "22:00 - 23:00"
+      ],
+      "rules": [
+        "No outdoor spiked footwear",
+        "Strict 60-min slot adherence"
+      ],
+      "equipmentAvailable": [
+        "Wilson Carbon Racket",
+        "Dunlop Pro Padel Balls"
+      ],
+      "image": "https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
+      "badge": "Floodlit",
+      "isMembershipRequired": false
+    },
+    {
+      "id": "badminton-indoor",
+      "name": "Indoor Badminton Championship Hall",
+      "category": "Indoor",
+      "description": "Four BWF-certified teakwood sprung courts with shock absorption, climate cooling, and spectator gallery.",
+      "location": "Indoor Sports Hall, Level 1",
+      "maxPlayers": 4,
+      "studentTimings": "06:00 AM - 12:00 PM \u0026 03:00 PM - 11:00 PM",
+      "facultyTimings": "04:00 PM - 06:00 PM (Court 1 \u0026 2 Dedicated)",
+      "slots": [
+        "06:00 - 07:00",
+        "07:00 - 08:00",
+        "08:00 - 09:00",
+        "09:00 - 10:00",
+        "10:00 - 11:00",
+        "15:00 - 16:00",
+        "16:00 - 17:00",
+        "17:00 - 18:00",
+        "18:00 - 19:00",
+        "19:00 - 20:00",
+        "20:00 - 21:00",
+        "21:00 - 22:00",
+        "22:00 - 23:00"
+      ],
+      "rules": [
+        "Strict non-marking indoor court shoes only",
+        "No food or sugary drinks on wood surface"
+      ],
+      "equipmentAvailable": [
+        "Yonex Nanoray Racket",
+        "Aerosensa Feather Shuttles",
+        "Nylon Shuttles"
+      ],
+      "image": "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
+      "badge": "BWF Certified",
+      "isMembershipRequired": false
+    },
+    {
+      "id": "squash-courts",
+      "name": "Glass-Back Squash Complex (Courts 1-3)",
+      "category": "Racquet",
+      "description": "Three glass-back competition squash courts with Junckers Beech flooring and electronic scoring monitors.",
+      "location": "Sports Complex, West Wing Ground Floor",
+      "maxPlayers": 2,
+      "studentTimings": "06:00 AM - 11:00 AM \u0026 04:00 PM - 10:30 PM",
+      "facultyTimings": "05:00 PM - 07:00 PM (Court 3 Reserved)",
+      "slots": [
+        "06:00 - 07:00",
+        "07:00 - 08:00",
+        "08:00 - 09:00",
+        "09:00 - 10:00",
+        "10:00 - 11:00",
+        "15:00 - 16:00",
+        "16:00 - 17:00",
+        "17:00 - 18:00",
+        "18:00 - 19:00",
+        "19:00 - 20:00",
+        "20:00 - 21:00",
+        "21:00 - 22:00",
+        "22:00 - 23:00"
+      ],
+      "rules": [
+        "Goggles/Eye protection recommended",
+        "White/Gum sole shoes only"
+      ],
+      "equipmentAvailable": [
+        "Head Squash Rackets",
+        "Dunlop Pro Double Yellow Dot Balls"
+      ],
+      "image": "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
+      "badge": "Glass Back",
+      "isMembershipRequired": false
+    },
+    {
+      "id": "tennis-synthetic",
+      "name": "Hard Tennis Courts (Courts 1 \u0026 2)",
+      "category": "Outdoor",
+      "description": "Two US Open-grade acrylic cushioned hard courts with high-mast LED night lighting.",
+      "location": "Campus South Perimeter Sports Ground",
+      "maxPlayers": 4,
+      "studentTimings": "06:00 AM - 10:00 AM \u0026 04:30 PM - 10:30 PM",
+      "facultyTimings": "05:00 PM - 07:00 PM",
+      "slots": [
+        "06:00 - 07:00",
+        "07:00 - 08:00",
+        "08:00 - 09:00",
+        "09:00 - 10:00",
+        "10:00 - 11:00",
+        "15:00 - 16:00",
+        "16:00 - 17:00",
+        "17:00 - 18:00",
+        "18:00 - 19:00",
+        "19:00 - 20:00",
+        "20:00 - 21:00",
+        "21:00 - 22:00",
+        "22:00 - 23:00"
+      ],
+      "rules": [
+        "Tennis shoes with smooth soles required",
+        "Turn off floodlights if last to leave"
+      ],
+      "equipmentAvailable": [
+        "Wilson Clash Rackets",
+        "Penn Championship Tennis Balls"
+      ],
+      "image": "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
+      "badge": "Tournament Grade",
+      "isMembershipRequired": false
+    },
+    {
+      "id": "futsal-arena",
+      "name": "GIKI Floodlit Futsal Arena",
+      "category": "Outdoor",
+      "description": "FIFA Quality certified artificial turf pitch with side rebound netting and digital score display.",
+      "location": "Sports Complex Central Courtyard",
+      "maxPlayers": 12,
+      "studentTimings": "05:00 PM - 11:30 PM",
+      "facultyTimings": "08:00 PM - 09:30 PM (Wednesdays \u0026 Fridays)",
+      "slots": [
+        "06:00 - 07:00",
+        "07:00 - 08:00",
+        "08:00 - 09:00",
+        "09:00 - 10:00",
+        "10:00 - 11:00",
+        "15:00 - 16:00",
+        "16:00 - 17:00",
+        "17:00 - 18:00",
+        "18:00 - 19:00",
+        "19:00 - 20:00",
+        "20:00 - 21:00",
+        "21:00 - 22:00",
+        "22:00 - 23:00"
+      ],
+      "rules": [
+        "Turf shoes only (strictly no metal studs)",
+        "Team captain must present student ID"
+      ],
+      "equipmentAvailable": [
+        "Match Futsal Balls (Low Bounce)",
+        "Numbered Bibs (Red/Neon)",
+        "Goalkeeper Gloves"
+      ],
+      "image": "https://images.unsplash.com/photo-1529900245534-47fbf024a16d?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
+      "badge": "Night Arena",
+      "isMembershipRequired": false
+    },
+    {
+      "id": "table-tennis",
+      "name": "Table Tennis Arena (6 Tables)",
+      "category": "Indoor",
+      "description": "Equipped with 6 ITTF approved Butterfly Centrefold 25 tournament tables with tournament lighting.",
+      "location": "Indoor Complex, Mezzanine Hall",
+      "maxPlayers": 4,
+      "studentTimings": "08:00 AM - 11:00 PM",
+      "facultyTimings": "All-day access (Table 1 dedicated)",
+      "slots": [
+        "06:00 - 07:00",
+        "07:00 - 08:00",
+        "08:00 - 09:00",
+        "09:00 - 10:00",
+        "10:00 - 11:00",
+        "15:00 - 16:00",
+        "16:00 - 17:00",
+        "17:00 - 18:00",
+        "18:00 - 19:00",
+        "19:00 - 20:00",
+        "20:00 - 21:00",
+        "21:00 - 22:00",
+        "22:00 - 23:00"
+      ],
+      "rules": [
+        "Return rackets and 3-star balls to rack after use"
+      ],
+      "equipmentAvailable": [
+        "Stiga Professional Paddles",
+        "Nittaku 3-Star Poly Balls"
+      ],
+      "image": "https://images.unsplash.com/photo-1534158914592-062992fbe900?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
+      "badge": "ITTF Standard",
+      "isMembershipRequired": false
+    },
+    {
+      "id": "gymnasium",
+      "name": "GIKI Central Fitness \u0026 Strength Gym",
+      "category": "Fitness",
+      "description": "Comprehensive weightlifting zone, Olympic squat racks, cardiovascular treadmills, ellipticals, and functional trainer rigs.",
+      "location": "Sports Complex, Ground Floor East",
+      "maxPlayers": 35,
+      "studentTimings": "06:30 AM - 10:30 AM (Male/Female Slots) \u0026 04:00 PM - 10:30 PM",
+      "facultyTimings": "05:30 PM - 07:30 PM (Dedicated Faculty Area)",
+      "slots": [
+        "06:00 - 07:00",
+        "07:00 - 08:00",
+        "08:00 - 09:00",
+        "09:00 - 10:00",
+        "10:00 - 11:00",
+        "15:00 - 16:00",
+        "16:00 - 17:00",
+        "17:00 - 18:00",
+        "18:00 - 19:00",
+        "19:00 - 20:00",
+        "20:00 - 21:00",
+        "21:00 - 22:00",
+        "22:00 - 23:00"
+      ],
+      "rules": [
+        "Clean workout towel mandatory",
+        "Re-rack all weights and dumbbells after use",
+        "Indoor trainers required"
+      ],
+      "equipmentAvailable": [
+        "Lifting Belts",
+        "Resistance Bands",
+        "Foam Rollers"
+      ],
+      "image": "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
+      "badge": "Strength \u0026 Cardio",
+      "isMembershipRequired": true
+    },
+    {
+      "id": "swimming-pool",
+      "name": "GIKI Semi-Olympic Swimming Pool",
+      "category": "Aquatics",
+      "description": "25-meter 6-lane temperature-controlled pool with ozone filtration and certified lifeguards on duty.",
+      "location": "Aquatic Center, Sports Complex",
+      "maxPlayers": 25,
+      "studentTimings": "07:00 AM - 10:00 AM \u0026 04:00 PM - 08:30 PM (Designated male/female sessions)",
+      "facultyTimings": "05:00 PM - 06:30 PM",
+      "slots": [
+        "06:00 - 07:00",
+        "07:00 - 08:00",
+        "08:00 - 09:00",
+        "09:00 - 10:00",
+        "10:00 - 11:00",
+        "15:00 - 16:00",
+        "16:00 - 17:00",
+        "17:00 - 18:00",
+        "18:00 - 19:00",
+        "19:00 - 20:00",
+        "20:00 - 21:00",
+        "21:00 - 22:00",
+        "22:00 - 23:00"
+      ],
+      "rules": [
+        "Shower before entering pool",
+        "Silicone swim cap mandatory",
+        "No diving in shallow end"
+      ],
+      "equipmentAvailable": [
+        "Kickboards",
+        "Pull Buoys",
+        "Swim Goggles"
+      ],
+      "image": "https://images.unsplash.com/photo-1530549387789-4c1017266635?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
+      "badge": "Heated 25m",
+      "isMembershipRequired": true
+    }
+  ],
+  "bookings": [
+    {
+      "id": "BK-10492",
+      "facilityId": "padel-court-1",
+      "facilityName": "GIKI Glass Padel Arena (Court 1)",
+      "date": "2026-09-26",
+      "timeSlot": "18:00 - 19:00",
+      "bookerType": "student",
+      "bookerName": "Hamza Tariq",
+      "bookerId": "2022-CS-089",
+      "bookerEmail": "u2022089@giki.edu.pk",
+      "bookerPhone": "+92 301 5551234",
+      "equipmentRentals": [
+        "Babolat Padel Racket",
+        "Pro Padel Balls (Can of 3)"
+      ],
+      "status": "confirmed",
+      "checkInCode": "4821",
+      "createdAt": "2026-09-25T23:36:02.7888044+05:00"
+    },
+    {
+      "id": "BK-10493",
+      "facilityId": "padel-court-1",
+      "facilityName": "GIKI Glass Padel Arena (Court 1)",
+      "date": "2026-09-26",
+      "timeSlot": "19:00 - 20:00",
+      "bookerType": "faculty",
+      "bookerName": "Dr. Zia Ur Rehman",
+      "bookerId": "FAC-FES-014",
+      "bookerEmail": "zia.rehman@giki.edu.pk",
+      "bookerPhone": "+92 333 4448899",
+      "equipmentRentals": [],
+      "status": "confirmed",
+      "checkInCode": "9183",
+      "createdAt": "2026-09-25T20:36:02.7888044+05:00"
+    },
+    {
+      "id": "BK-10494",
+      "facilityId": "badminton-indoor",
+      "facilityName": "Indoor Badminton Championship Hall",
+      "date": "2026-09-26",
+      "timeSlot": "17:00 - 18:00",
+      "bookerType": "student",
+      "bookerName": "Ayesha Farooq",
+      "bookerId": "2023-EE-045",
+      "bookerEmail": "u2023045@giki.edu.pk",
+      "bookerPhone": "+92 312 9988776",
+      "equipmentRentals": [
+        "Aerosensa Feather Shuttles"
+      ],
+      "status": "confirmed",
+      "checkInCode": "2049",
+      "createdAt": "2026-09-25T17:36:02.7888044+05:00"
+    },
+    {
+      "id": "BK-10495",
+      "facilityId": "squash-courts",
+      "facilityName": "Glass-Back Squash Complex (Courts 1-3)",
+      "date": "2026-09-27",
+      "timeSlot": "18:00 - 19:00",
+      "bookerType": "student",
+      "bookerName": "Bilal Saeed",
+      "bookerId": "2021-ME-112",
+      "bookerEmail": "u2021112@giki.edu.pk",
+      "bookerPhone": "+92 345 7766554",
+      "equipmentRentals": [
+        "Head Squash Rackets"
+      ],
+      "status": "confirmed",
+      "checkInCode": "7731",
+      "createdAt": "2026-09-26T00:36:02.7888044+05:00"
+    }
+  ],
+  "achievements": [
+    {
+      "id": "ach-001",
+      "title": "GIKI Padel Titans Crowned Champions at HEC Intervarsity Tournament 2026",
+      "sport": "Padel Tennis",
+      "date": "September 2026",
+      "category": "National Gold",
+      "description": "The GIKI Varsity Padel squad displayed masterclass tactical precision and endurance, overcoming IBA Karachi in a thrilling 3-set finale (6-4, 4-6, 7-5) to hoist the national trophy.",
+      "teamMembers": "Hamza Tariq (Captain), Daniyal Munir, Saad Ali, Rayyan Shah",
+      "image": "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
+      "directorNote": "Historic victory for GIKI in the rapidly growing paddle arena! Our investments in the glass courts are already generating national championships.",
+      "featured": true,
+      "createdAt": "2026-09-16T01:36:02.7888044+05:00"
+    },
+    {
+      "id": "ach-002",
+      "title": "All-Pakistan Inter-University Badminton Championship: Silver Medal for GIKI",
+      "sport": "Badminton",
+      "date": "August 2026",
+      "category": "Intervarsity Champion",
+      "description": "GIKI's men doubles pair clinched the Silver Medal after an intense 55-minute clash at the Pakistan Sports Complex Islamabad, defeating LUMS and NUST in preceding rounds.",
+      "teamMembers": "Shahzaib Khan \u0026 Waleed Ahmed",
+      "image": "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
+      "directorNote": "Superb resilience and court coverage. Both student-athletes balanced rigorous engineering exams while training under floodlights.",
+      "featured": true,
+      "createdAt": "2026-08-26T01:36:02.7888044+05:00"
+    },
+    {
+      "id": "ach-003",
+      "title": "KPK Squash Open: GIKI Squash Ace Reaches Semifinals",
+      "sport": "Squash",
+      "date": "July 2026",
+      "category": "Special Mention",
+      "description": "Representing GIKI Sports Complex, sophomore Hassan Raza defeated 2 seeded provincial players before reaching the semifinal stage of the prestigious KPK Open.",
+      "teamMembers": "Hassan Raza (Mechanical Engg.)",
+      "image": "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
+      "directorNote": "Hassan's dedication sets a benchmark for all incoming freshers at the sports orientation.",
+      "featured": false,
+      "createdAt": "2026-07-26T01:36:02.7888044+05:00"
+    },
+    {
+      "id": "ach-004",
+      "title": "GIKI Futsal League 2026: Mechanical Hawks Hoist President's Cup",
+      "sport": "Futsal",
+      "date": "May 2026",
+      "category": "Campus Championship",
+      "description": "Over 24 departmental teams battled through 3 weeks under the lights. Mechanical Engineering emerged victorious in sudden-death penalty shootout against Computer Science.",
+      "teamMembers": "Hawks Squad (Capt: Zeeshan Malik, Golden Boot: Zain Ul Abideen)",
+      "image": "https://images.unsplash.com/photo-1529900245534-47fbf024a16d?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
+      "directorNote": "Unprecedented campus engagement with over 800 students attending the night final.",
+      "featured": true,
+      "createdAt": "2026-05-26T01:36:02.7888044+05:00"
+    }
+  ],
+  "announcements": [
+    {
+      "id": "ann-01",
+      "title": "New Glass Padel Court #2 Floodlights Upgraded to 800 Lux LED",
+      "content": "To support evening tournament play and student night sessions, court #2 lighting has been upgraded. Extra night slots are now bookable up to 11:00 PM.",
+      "date": "2026-09-26",
+      "priority": "info",
+      "createdAt": "2026-09-25T13:36:02.7888044+05:00"
+    },
+    {
+      "id": "ann-02",
+      "title": "GIKI Annual Sports Gala 2026 Registration Opens Next Monday",
+      "content": "Trial registrations for Racquet Sports, Futsal, Table Tennis, and Swimming will commence through this portal. Keep your GIKI ID validated.",
+      "date": "2026-09-26",
+      "priority": "urgent",
+      "createdAt": "2026-09-25T01:36:02.7888044+05:00"
+    },
+    {
+      "id": "ann-03",
+      "title": "Squash Court #2 Floor Buffing \u0026 Maintenance Schedule",
+      "content": "Squash Court 2 will remain offline on Sunday morning (08:00 - 14:00) for standard polyurethane varnish refinishing. Court 1 \u0026 3 remain operational.",
+      "date": "2026-09-26",
+      "priority": "maintenance",
+      "createdAt": "2026-09-24T01:36:02.7888044+05:00"
+    }
+  ],
+  "memberships": [
+    {
+      "id": "MBR-8801",
+      "applicantName": "Saad Farooq",
+      "applicantId": "2023-CS-302",
+      "applicantType": "student",
+      "plan": "Padel Court Priority Pass (Semester)",
+      "status": "active",
+      "validUntil": "2026-12-31",
+      "createdAt": "2026-08-26T01:36:02.7888044+05:00"
+    },
+    {
+      "id": "MBR-8802",
+      "applicantName": "Dr. Tariq Jadoon",
+      "applicantId": "FAC-FCSE-003",
+      "applicantType": "faculty",
+      "plan": "Faculty All-Sports VIP Card",
+      "status": "active",
+      "validUntil": "2027-06-30",
+      "createdAt": "2026-07-26T01:36:02.7888044+05:00"
+    }
+  ]
+}
