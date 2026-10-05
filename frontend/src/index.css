@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+:root {
+  --color-maroon: #611220;
+  --color-maroon-dark: #470c17;
+  --color-gold: #c9a227;
+  --color-gold-light: #d4af6a;
+  --color-navy: #17284d;
+  --color-navy-soft: #425070;
+  --color-bg: #ffffff;
+  --color-surface: #f8f6f1;
+  /* soft cream card surface against the white page */
+  --color-border: #e7e1d3;
+
+  --font-display: "Oswald", "Arial Narrow", sans-serif;
+  --font-body: "Inter", "Segoe UI", sans-serif;
+}
+
+@theme {
+  --color-maroon: #611220;
+  --color-maroon-dark: #470c17;
+  --color-gold: #c9a227;
+  --color-gold-light: #d4af6a;
+  --color-navy: #17284d;
+  --color-navy-soft: #425070;
+  --color-surface: #f8f6f1;
+  --color-border-soft: #e7e1d3;
+  --font-display: "Oswald", "Arial Narrow", sans-serif;
+  --font-body: "Inter", "Segoe UI", sans-serif;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-navy);
+  font-family: var(--font-body);
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+}
+
+/* Visible keyboard focus everywhere, instead of removing the outline */
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
