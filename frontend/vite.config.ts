@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -7,12 +8,17 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      // Forwards every /api/* call to the Go backend during local dev.
-      // Change the target if your backend runs on a different port.
+      // Forwards every /api/* call to the Go backend on port 8081 during local dev.
       "/api": {
-        target: "http://localhost:8080",
+        target: "http://127.0.0.1:8081",
         changeOrigin: true,
       },
     },
+  },
+  test: {
+    globals: true,
+    environment: "jsdom",
+    setupFiles: "./src/test/setup.ts",
+    testTimeout: 15000,
   },
 });
