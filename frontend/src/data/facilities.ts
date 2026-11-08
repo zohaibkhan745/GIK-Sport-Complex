@@ -1,6 +1,6 @@
-import type { Facility } from "../types";
+import type { LegacyFacility } from "../types";
 
-export const FACILITIES: Facility[] = [
+export const FACILITIES: LegacyFacility[] = [
   {
     slug: "glass-padel-arena",
     name: "GIKI Glass Padel Arena",
@@ -170,6 +170,6 @@ export const FACILITIES: Facility[] = [
   },
 ];
 
-export function getFacilityBySlug(slug: string): Facility | undefined {
+export function getFacilityBySlug(slug: string): LegacyFacility | undefined {
   return FACILITIES.find((f) => f.slug === slug);
 }
