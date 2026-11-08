@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -16,6 +19,14 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/google/uuid"
+
+	"giki-sports-backend/internal/authentication"
+	"giki-sports-backend/internal/config"
+	"giki-sports-backend/internal/content"
+	"giki-sports-backend/internal/database"
+	"giki-sports-backend/internal/facility"
+	"giki-sports-backend/internal/session"
+	"giki-sports-backend/internal/user"
 )
 
 type Facility struct {
@@ -483,11 +494,32 @@ func (s *Store) seedDefaultData() {
 }
 
 func main() {
+	// Step 1: Load and validate application and database configuration
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("[FATAL] Configuration initialization failed: %v", err)
+	}
+
+	// Step 2: Initialize and verify PostgreSQL connection pool before accepting requests
+	log.Printf("Connecting to PostgreSQL at %s:%d (database: %s, user: %s, sslmode: %s)...",
+		cfg.DB.Host, cfg.DB.Port, cfg.DB.Name, cfg.DB.User, cfg.DB.SSLMode)
+	dbPool, err := database.NewPool(context.Background(), cfg.DB)
+	if err != nil {
+		log.Fatalf("[FATAL] Database connection failed: %v", err)
+	}
+	defer func() {
+		log.Println("Closing database connection pool...")
+		dbPool.Close()
+	}()
+	log.Printf("✓ PostgreSQL connection pool established successfully (max_conns: %d, min_conns: %d)",
+		cfg.DB.MaxConns, cfg.DB.MinConns)
+
+	// Step 3: Local JSON storage (Notice: business data endpoints still use JSON storage at this step)
 	storePath := filepath.Join(".", "data", "store.json")
 	store := NewStore(storePath)
 
 	app := fiber.New(fiber.Config{
-		AppName:      "GIKI Sports Complex API v1.0 (Ultra Fast)",
+		AppName:      "GIKI Sports Complex API v1.0",
 		ServerHeader: "GoFiber/GIKI-Sports",
 	})
 
@@ -495,15 +527,21 @@ func main() {
 		Format: "[${time}] ${status} - ${latency} ${method} ${path}\n",
 	}))
 	app.Use(recover.New())
+
+	// CORS Configuration: Narrowly scoped to configured trusted origins with credentials enabled.
+	// Wildcards are strictly avoided to prevent credentialed cross-site leakage.
+	corsOrigins := strings.Join(cfg.Auth.TrustedOrigins, ", ")
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Director-Key",
-		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
+		AllowOrigins:     corsOrigins,
+		AllowCredentials: true,
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Director-Key",
+		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
 	}))
 
-	// Static & Health
+	// Static, Health & Readiness
 	api := app.Group("/api")
 
+	// Liveness probe: returns application process health
 	api.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"status":    "online",
@@ -513,25 +551,68 @@ func main() {
 		})
 	})
 
-	// Facilities & Timings
-	api.Get("/facilities", func(c *fiber.Ctx) error {
-		store.mu.RLock()
-		defer store.mu.RUnlock()
-		return c.JSON(store.Data.Facilities)
-	})
+	// Readiness probe: verifies live PostgreSQL database connectivity
+	// Note: database readiness confirms pool ping; business schema migrations and business data persistence remain pending
+	api.Get("/ready", func(c *fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(c.Context(), 2*time.Second)
+		defer cancel()
 
-	api.Get("/facilities/:id", func(c *fiber.Ctx) error {
-		id := c.Params("id")
-		store.mu.RLock()
-		defer store.mu.RUnlock()
-
-		for _, f := range store.Data.Facilities {
-			if f.ID == id {
-				return c.JSON(f)
-			}
+		if err := dbPool.Ping(ctx); err != nil {
+			log.Printf("[ERROR] Database readiness ping failed: %v", err)
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"status":  "unavailable",
+				"message": "database service unavailable",
+			})
 		}
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Facility not found"})
+
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"status":   "ready",
+			"database": "connected",
+			"note":     "database connectivity verified; business schema migrations and data persistence remain pending",
+		})
 	})
+
+	// Step 6G: Authentication Service & Handlers (PostgreSQL persistent session integration)
+	// Constructed once during startup; dummy Argon2id hash is precomputed once, never per request.
+	userRepo := user.NewRepository(dbPool)
+	sessionRepo := session.NewRepository(dbPool)
+	authService, err := authentication.NewService(userRepo, sessionRepo)
+	if err != nil {
+		log.Fatalf("[FATAL] Authentication service initialization failed: %v", err)
+	}
+	authHandler := authentication.NewHandler(authService, cfg.Auth)
+	authHandler.RegisterRoutes(api)
+
+	// Facilities & Timings (PostgreSQL repository integration)
+	// Step 7D: Public read routes and protected schedule update route with trusted Origin check, session auth, and role check
+	facilityRepo := facility.NewRepository(dbPool)
+	facilityHandler := facility.NewHandler(facilityRepo, 5*time.Second)
+	facilityHandler.RegisterRoutes(api)
+	facilityHandler.RegisterScheduleUpdateRoute(api,
+		authHandler.RequireTrustedOrigin(),
+		authHandler.RequireAuth(),
+		authentication.RequireAnyRole(user.RoleSportsDirector, user.RoleSuperAdmin),
+	)
+	facilityHandler.RegisterScheduleDeleteRoute(api,
+		authHandler.RequireTrustedOrigin(),
+		authHandler.RequireAuth(),
+		authentication.RequireAnyRole(user.RoleSportsDirector, user.RoleSuperAdmin),
+	)
+	facilityHandler.RegisterScheduleCreateRoute(api,
+		authHandler.RequireTrustedOrigin(),
+		authHandler.RequireAuth(),
+		authentication.RequireAnyRole(user.RoleSportsDirector, user.RoleSuperAdmin),
+	)
+
+	// Step 10E, 10F & 10G: Announcements & Achievements (PostgreSQL content repository integration)
+	contentRepo := content.NewRepository(dbPool)
+	contentHandler := content.NewHandler(contentRepo, 5*time.Second)
+	contentHandler.RegisterPublicRoutes(api)
+	contentHandler.RegisterDraftRoutes(api,
+		authHandler.RequireTrustedOrigin(),
+		authHandler.RequireAuth(),
+		authentication.RequireAnyRole(user.RoleSportsDirector, user.RoleSuperAdmin),
+	)
 
 	// Bookings
 	api.Get("/bookings", func(c *fiber.Ctx) error {
@@ -805,13 +886,26 @@ func main() {
 		})
 	})
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	// Graceful shutdown handling
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	log.Printf("⚡ GIKI Sports Complex Ultra-Fast Go Backend listening on port :%s\n", port)
-	if err := app.Listen(":" + port); err != nil {
-		log.Fatalf("Server error: %v", err)
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Printf("⚡ GIKI Sports Complex Go Backend listening on port :%s\n", cfg.Port)
+		if err := app.Listen(":" + cfg.Port); err != nil {
+			serverErr <- err
+		}
+	}()
+
+	select {
+	case err := <-serverErr:
+		log.Fatalf("[FATAL] Server listener error: %v", err)
+	case sig := <-sigChan:
+		log.Printf("Received signal '%s'. Initiating graceful shutdown...", sig)
+		if err := app.Shutdown(); err != nil {
+			log.Printf("[ERROR] Graceful shutdown error: %v", err)
+		}
+		log.Println("Server shutdown complete.")
 	}
 }
