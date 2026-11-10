@@ -728,4 +728,233 @@ func TestContentHTTP_Integration(t *testing.T) {
 			t.Errorf("expected published_at to remain nil after audit rollback, got %v", currentPubAt)
 		}
 	})
+
+	// =========================================================================
+	// STEP 10H: Protected Content Drafts Listing and Lifecycle
+	// =========================================================================
+	t.Run("Step10H_ListDrafts_Auth_Role_Filter_And_PublishLifecycle", func(t *testing.T) {
+		// 1. Signed-out users are denied (401)
+		reqSignedOut := httptest.NewRequest("GET", "/api/admin/content/drafts", nil)
+		respSignedOut, err := app.Test(reqSignedOut)
+		if err != nil {
+			t.Fatalf("signed-out request failed: %v", err)
+		}
+		defer respSignedOut.Body.Close()
+		if respSignedOut.StatusCode != http.StatusUnauthorized {
+			t.Errorf("expected 401 Unauthorized for signed-out user, got %d", respSignedOut.StatusCode)
+		}
+
+		// 2. Students are denied (403)
+		reqStudent := httptest.NewRequest("GET", "/api/admin/content/drafts", nil)
+		reqStudent.AddCookie(&http.Cookie{Name: "giki_session", Value: studentCookie})
+		respStudent, err := app.Test(reqStudent)
+		if err != nil {
+			t.Fatalf("student request failed: %v", err)
+		}
+		defer respStudent.Body.Close()
+		if respStudent.StatusCode != http.StatusForbidden {
+			t.Errorf("expected 403 Forbidden for student user, got %d", respStudent.StatusCode)
+		}
+
+		// 3. Sports Director is authorized (200) without requiring an Origin header
+		reqDirector := httptest.NewRequest("GET", "/api/admin/content/drafts", nil)
+		reqDirector.AddCookie(&http.Cookie{Name: "giki_session", Value: directorCookie})
+		respDirector, err := app.Test(reqDirector)
+		if err != nil {
+			t.Fatalf("director request failed: %v", err)
+		}
+		defer respDirector.Body.Close()
+		if respDirector.StatusCode != http.StatusOK {
+			t.Errorf("expected 200 OK for sports director, got %d", respDirector.StatusCode)
+		}
+		if cc := respDirector.Header.Get("Cache-Control"); cc != "no-store" {
+			t.Errorf("expected Cache-Control: no-store, got %q", cc)
+		}
+
+		// 4. Create drafts with distinct content kinds
+		// A: Incomplete announcement draft (no title, no content)
+		bodyIncomplete := `{"kind":"announcement"}`
+		reqInc := httptest.NewRequest("POST", "/api/admin/content/drafts", strings.NewReader(bodyIncomplete))
+		reqInc.Header.Set("Content-Type", "application/json")
+		reqInc.Header.Set("Origin", "http://127.0.0.1:5173")
+		reqInc.AddCookie(&http.Cookie{Name: "giki_session", Value: directorCookie})
+		respInc, _ := app.Test(reqInc)
+		if respInc.StatusCode != http.StatusCreated {
+			t.Fatalf("failed to create incomplete draft: status %d", respInc.StatusCode)
+		}
+		var incDraft content.DraftResponse
+		_ = json.NewDecoder(respInc.Body).Decode(&incDraft)
+		respInc.Body.Close()
+
+		// B: Complete achievement draft
+		bodyAchieve := `{"kind":"achievement","title":"Squash Championship","content":"GIKI won university squash finals."}`
+		reqAch := httptest.NewRequest("POST", "/api/admin/content/drafts", strings.NewReader(bodyAchieve))
+		reqAch.Header.Set("Content-Type", "application/json")
+		reqAch.Header.Set("Origin", "http://127.0.0.1:5173")
+		reqAch.AddCookie(&http.Cookie{Name: "giki_session", Value: directorCookie})
+		respAch, _ := app.Test(reqAch)
+		if respAch.StatusCode != http.StatusCreated {
+			t.Fatalf("failed to create achievement draft: status %d", respAch.StatusCode)
+		}
+		var achDraft content.DraftResponse
+		_ = json.NewDecoder(respAch.Body).Decode(&achDraft)
+		respAch.Body.Close()
+
+		// C: Complete announcement draft to be published
+		bodyPub := `{"kind":"announcement","title":"Track Repair Scheduled","content":"Running track will be resurfaced this week."}`
+		reqPubDraft := httptest.NewRequest("POST", "/api/admin/content/drafts", strings.NewReader(bodyPub))
+		reqPubDraft.Header.Set("Content-Type", "application/json")
+		reqPubDraft.Header.Set("Origin", "http://127.0.0.1:5173")
+		reqPubDraft.AddCookie(&http.Cookie{Name: "giki_session", Value: directorCookie})
+		respPubDraft, _ := app.Test(reqPubDraft)
+		if respPubDraft.StatusCode != http.StatusCreated {
+			t.Fatalf("failed to create announcement draft: status %d", respPubDraft.StatusCode)
+		}
+		var pubDraft content.DraftResponse
+		_ = json.NewDecoder(respPubDraft.Body).Decode(&pubDraft)
+		respPubDraft.Body.Close()
+
+		// 5. Query all drafts -> must include incomplete draft, achievement draft, and announcement draft
+		reqListAll := httptest.NewRequest("GET", "/api/admin/content/drafts", nil)
+		reqListAll.AddCookie(&http.Cookie{Name: "giki_session", Value: directorCookie})
+		respListAll, _ := app.Test(reqListAll)
+		if respListAll.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200 from ListDrafts, got %d", respListAll.StatusCode)
+		}
+		var allSummaries []content.DraftSummaryResponse
+		_ = json.NewDecoder(respListAll.Body).Decode(&allSummaries)
+		respListAll.Body.Close()
+
+		// Verify that all 3 created drafts are present
+		foundInc := false
+		foundAch := false
+		foundPub := false
+		for _, s := range allSummaries {
+			if s.ID == incDraft.ID {
+				foundInc = true
+				if s.Title != nil {
+					t.Errorf("expected incomplete draft title to be null, got %v", *s.Title)
+				}
+				if s.Kind != "announcement" {
+					t.Errorf("expected incomplete draft kind announcement, got %s", s.Kind)
+				}
+			}
+			if s.ID == achDraft.ID {
+				foundAch = true
+				if s.Title == nil || *s.Title != "Squash Championship" {
+					t.Errorf("expected achievement title 'Squash Championship', got %v", s.Title)
+				}
+			}
+			if s.ID == pubDraft.ID {
+				foundPub = true
+			}
+		}
+		if !foundInc || !foundAch || !foundPub {
+			t.Errorf("missing drafts from list: inc=%v, ach=%v, pub=%v", foundInc, foundAch, foundPub)
+		}
+
+		// 6. Test kind filtering: ?kind=announcement
+		reqFilterAnn := httptest.NewRequest("GET", "/api/admin/content/drafts?kind=announcement", nil)
+		reqFilterAnn.AddCookie(&http.Cookie{Name: "giki_session", Value: directorCookie})
+		respFilterAnn, _ := app.Test(reqFilterAnn)
+		if respFilterAnn.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200 for ?kind=announcement, got %d", respFilterAnn.StatusCode)
+		}
+		var annSummaries []content.DraftSummaryResponse
+		_ = json.NewDecoder(respFilterAnn.Body).Decode(&annSummaries)
+		respFilterAnn.Body.Close()
+
+		for _, s := range annSummaries {
+			if s.Kind != "announcement" {
+				t.Errorf("unexpected non-announcement item in filtered list: %v", s)
+			}
+			if s.ID == achDraft.ID {
+				t.Errorf("achievement draft appeared in announcement filter!")
+			}
+		}
+
+		// 7. Test kind filtering: ?kind=achievement
+		reqFilterAch := httptest.NewRequest("GET", "/api/admin/content/drafts?kind=achievement", nil)
+		reqFilterAch.AddCookie(&http.Cookie{Name: "giki_session", Value: directorCookie})
+		respFilterAch, _ := app.Test(reqFilterAch)
+		if respFilterAch.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200 for ?kind=achievement, got %d", respFilterAch.StatusCode)
+		}
+		var achSummaries []content.DraftSummaryResponse
+		_ = json.NewDecoder(respFilterAch.Body).Decode(&achSummaries)
+		respFilterAch.Body.Close()
+
+		for _, s := range achSummaries {
+			if s.Kind != "achievement" {
+				t.Errorf("unexpected non-achievement item in filtered list: %v", s)
+			}
+			if s.ID == incDraft.ID || s.ID == pubDraft.ID {
+				t.Errorf("announcement draft appeared in achievement filter!")
+			}
+		}
+
+		// 8. Test invalid kind filter returns 400 Bad Request
+		reqInvalidKind := httptest.NewRequest("GET", "/api/admin/content/drafts?kind=invalid_filter", nil)
+		reqInvalidKind.AddCookie(&http.Cookie{Name: "giki_session", Value: directorCookie})
+		respInvalidKind, _ := app.Test(reqInvalidKind)
+		if respInvalidKind.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected 400 Bad Request for invalid kind query param, got %d", respInvalidKind.StatusCode)
+		}
+		respInvalidKind.Body.Close()
+
+		// 9. Publish pubDraft -> it must drop out of draft list and appear in public announcements feed
+		reqPublish := httptest.NewRequest("POST", "/api/admin/content/drafts/"+pubDraft.ID.String()+"/publish", nil)
+		reqPublish.Header.Set("Origin", "http://127.0.0.1:5173")
+		reqPublish.AddCookie(&http.Cookie{Name: "giki_session", Value: directorCookie})
+		respPublish, err := app.Test(reqPublish)
+		if err != nil {
+			t.Fatalf("publish request failed: %v", err)
+		}
+		defer respPublish.Body.Close()
+		if respPublish.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(respPublish.Body)
+			t.Fatalf("publish failed (status %d): %s", respPublish.StatusCode, string(body))
+		}
+
+		// 10. Verify pubDraft has dropped out of GET /api/admin/content/drafts
+		reqListAfterPub := httptest.NewRequest("GET", "/api/admin/content/drafts", nil)
+		reqListAfterPub.AddCookie(&http.Cookie{Name: "giki_session", Value: directorCookie})
+		respListAfterPub, _ := app.Test(reqListAfterPub)
+		var summariesAfterPub []content.DraftSummaryResponse
+		_ = json.NewDecoder(respListAfterPub.Body).Decode(&summariesAfterPub)
+		respListAfterPub.Body.Close()
+
+		for _, s := range summariesAfterPub {
+			if s.ID == pubDraft.ID {
+				t.Fatalf("published item %s still appeared in draft list after publication!", pubDraft.ID)
+			}
+		}
+
+		// 11. Verify pubDraft appears in public feed GET /api/content/announcements
+		reqPublicAnn := httptest.NewRequest("GET", "/api/content/announcements", nil)
+		respPublicAnn, _ := app.Test(reqPublicAnn)
+		if respPublicAnn.StatusCode != http.StatusOK {
+			t.Fatalf("public announcements request failed: status %d", respPublicAnn.StatusCode)
+		}
+		var publicAnnouncements []content.PublicContentResponse
+		_ = json.NewDecoder(respPublicAnn.Body).Decode(&publicAnnouncements)
+		respPublicAnn.Body.Close()
+
+		foundInPublic := false
+		for _, pubItem := range publicAnnouncements {
+			if pubItem.ID == pubDraft.ID {
+				foundInPublic = true
+				if pubItem.Title != "Track Repair Scheduled" {
+					t.Errorf("expected public title 'Track Repair Scheduled', got %q", pubItem.Title)
+				}
+				if pubItem.Content != "Running track will be resurfaced this week." {
+					t.Errorf("expected public content 'Running track will be resurfaced this week.', got %q", pubItem.Content)
+				}
+				break
+			}
+		}
+		if !foundInPublic {
+			t.Errorf("published announcement %s was not found in public announcements feed!", pubDraft.ID)
+		}
+	})
 }

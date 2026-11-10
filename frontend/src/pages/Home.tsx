@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Navbar } from "../components/Navbar";
 import { Hero } from "../components/Hero";
 import { StatsStrip } from "../components/StatsStrip";
-import { AchievementsFeed } from "../components/AchievementsFeed";
+import { AnnouncementsSection } from "../components/AnnouncementsSection";
+import { AchievementsSection } from "../components/AchievementsSection";
 import { FacilitiesGrid } from "../components/FacilitiesGrid";
 import { Footer } from "../components/Footer";
 import { api } from "../api";
@@ -53,7 +54,8 @@ export function Home() {
         <StatsStrip
           facilityCount={!isLoading && !error ? facilities.length : undefined}
         />
-        <AchievementsFeed />
+        <AnnouncementsSection />
+        <AchievementsSection />
         <FacilitiesGrid
           facilities={facilities}
           isLoading={isLoading}

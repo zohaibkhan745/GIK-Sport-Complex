@@ -1387,5 +1387,137 @@ func TestPostgresRepository_PublishDraft_ForcedAuditFailure_Rollback(t *testing.
 	}
 }
 
+// -----------------------------------------------------------------------------
+// Step 10H: ListDrafts Integration Tests
+// -----------------------------------------------------------------------------
+
+func TestContentRepository_ListDrafts(t *testing.T) {
+	pool, teardown := setupDisposableDB(t)
+	defer teardown()
+
+	ctx := context.Background()
+	repo := content.NewRepository(pool)
+
+	authorID := insertTestAuthor(t, pool)
+
+	// 1. Empty database returns empty slice
+	emptyDrafts, err := repo.ListDrafts(ctx, "")
+	if err != nil {
+		t.Fatalf("ListDrafts on empty DB failed: %v", err)
+	}
+	if emptyDrafts == nil {
+		t.Fatalf("expected non-nil slice from empty ListDrafts, got nil")
+	}
+	if len(emptyDrafts) != 0 {
+		t.Fatalf("expected 0 drafts, got %d", len(emptyDrafts))
+	}
+
+	// 2. Create synthetic drafts with distinct timestamps
+	// d1: Incomplete announcement draft (nil title, nil content)
+	d1, err := repo.CreateDraft(ctx, content.CreateDraftInput{
+		Kind: content.KindAnnouncement,
+	}, content.AuditParams{ActorID: authorID})
+	if err != nil {
+		t.Fatalf("failed to create d1: %v", err)
+	}
+
+	// d2: Complete achievement draft
+	d2, err := repo.CreateDraft(ctx, content.CreateDraftInput{
+		Kind:    content.KindAchievement,
+		Title:   content.StringPtr("Table Tennis Gold"),
+		Content: content.StringPtr("Won gold at inter-varsity championship."),
+	}, content.AuditParams{ActorID: authorID})
+	if err != nil {
+		t.Fatalf("failed to create d2: %v", err)
+	}
+
+	// d3: Complete announcement draft that will be published
+	d3, err := repo.CreateDraft(ctx, content.CreateDraftInput{
+		Kind:    content.KindAnnouncement,
+		Title:   content.StringPtr("Gym Maintenance"),
+		Content: content.StringPtr("Gym closed on Sunday for routine check."),
+	}, content.AuditParams{ActorID: authorID})
+	if err != nil {
+		t.Fatalf("failed to create d3: %v", err)
+	}
+
+	// Publish d3 so it transitions to status = 'published'
+	_, err = repo.PublishDraft(ctx, d3.ID, content.AuditParams{ActorID: authorID})
+	if err != nil {
+		t.Fatalf("failed to publish d3: %v", err)
+	}
+
+	// Update d1 to give it a newer updated_at timestamp than d2
+	time.Sleep(20 * time.Millisecond)
+	d1Updated, err := repo.UpdateDraft(ctx, d1.ID, content.UpdateDraftInput{
+		Title:   nil, // stays incomplete
+		Content: content.StringPtr("Updated note body"),
+	}, content.AuditParams{ActorID: authorID})
+	if err != nil {
+		t.Fatalf("failed to update d1: %v", err)
+	}
+
+	// 3. Query all drafts without kind filter
+	allDrafts, err := repo.ListDrafts(ctx, "")
+	if err != nil {
+		t.Fatalf("ListDrafts without filter failed: %v", err)
+	}
+	if len(allDrafts) != 2 {
+		t.Fatalf("expected exactly 2 draft items (published excluded), got %d", len(allDrafts))
+	}
+
+	// d1 was updated after d2, so d1 should be first in updated_at DESC order
+	if allDrafts[0].ID != d1Updated.ID {
+		t.Errorf("expected first draft to be %s (most recently updated), got %s", d1Updated.ID, allDrafts[0].ID)
+	}
+	if allDrafts[0].Title != nil {
+		t.Errorf("expected d1 title to be nil (incomplete), got %v", *allDrafts[0].Title)
+	}
+	if allDrafts[0].Kind != content.KindAnnouncement {
+		t.Errorf("expected d1 kind 'announcement', got %s", allDrafts[0].Kind)
+	}
+
+	if allDrafts[1].ID != d2.ID {
+		t.Errorf("expected second draft to be %s, got %s", d2.ID, allDrafts[1].ID)
+	}
+	if allDrafts[1].Title == nil || *allDrafts[1].Title != "Table Tennis Gold" {
+		t.Errorf("expected d2 title 'Table Tennis Gold', got %v", allDrafts[1].Title)
+	}
+	if allDrafts[1].Kind != content.KindAchievement {
+		t.Errorf("expected d2 kind 'achievement', got %s", allDrafts[1].Kind)
+	}
+
+	// Verify published d3 is not present
+	for _, item := range allDrafts {
+		if item.ID == d3.ID {
+			t.Fatalf("published item %s was found in draft list!", d3.ID)
+		}
+	}
+
+	// 4. Query with kind = announcement filter
+	announceDrafts, err := repo.ListDrafts(ctx, content.KindAnnouncement)
+	if err != nil {
+		t.Fatalf("ListDrafts(announcement) failed: %v", err)
+	}
+	if len(announceDrafts) != 1 || announceDrafts[0].ID != d1Updated.ID {
+		t.Fatalf("expected only announcement draft d1, got %v", announceDrafts)
+	}
+
+	// 5. Query with kind = achievement filter
+	achieveDrafts, err := repo.ListDrafts(ctx, content.KindAchievement)
+	if err != nil {
+		t.Fatalf("ListDrafts(achievement) failed: %v", err)
+	}
+	if len(achieveDrafts) != 1 || achieveDrafts[0].ID != d2.ID {
+		t.Fatalf("expected only achievement draft d2, got %v", achieveDrafts)
+	}
+
+	// 6. Query with invalid kind returns ErrInvalidKind
+	_, err = repo.ListDrafts(ctx, content.Kind("nonexistent_kind"))
+	if !errors.Is(err, content.ErrInvalidKind) {
+		t.Errorf("expected ErrInvalidKind for invalid kind, got: %v", err)
+	}
+}
+
 
 

@@ -44,6 +44,7 @@ func (h *Handler) RegisterPublicRoutes(router fiber.Router) {
 }
 
 // RegisterDraftRoutes mounts protected draft management endpoints:
+// - GET /admin/content/drafts (requires session auth, role check; no Origin check)
 // - POST /admin/content/drafts (requires Origin validation, session auth, role check)
 // - GET /admin/content/drafts/:id (requires session auth, role check; no Origin check)
 // - PUT /admin/content/drafts/:id (requires Origin validation, session auth, role check)
@@ -54,10 +55,20 @@ func (h *Handler) RegisterDraftRoutes(
 	requireAuth fiber.Handler,
 	requireRole fiber.Handler,
 ) {
+	router.Get("/admin/content/drafts", requireAuth, requireRole, h.ListDrafts)
 	router.Post("/admin/content/drafts", requireOrigin, requireAuth, requireRole, h.CreateDraft)
 	router.Get("/admin/content/drafts/:id", requireAuth, requireRole, h.GetDraftByID)
 	router.Put("/admin/content/drafts/:id", requireOrigin, requireAuth, requireRole, h.UpdateDraft)
 	router.Post("/admin/content/drafts/:id/publish", requireOrigin, requireAuth, requireRole, h.PublishDraft)
+}
+
+// RegisterDraftListRoute mounts only the protected GET /admin/content/drafts endpoint.
+func (h *Handler) RegisterDraftListRoute(
+	router fiber.Router,
+	requireAuth fiber.Handler,
+	requireRole fiber.Handler,
+) {
+	router.Get("/admin/content/drafts", requireAuth, requireRole, h.ListDrafts)
 }
 
 // RegisterPublishRoute mounts the protected POST /admin/content/drafts/:id/publish endpoint.
@@ -104,6 +115,49 @@ func (h *Handler) listByKind(c *fiber.Ctx, kind Kind) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(ToPublicContentResponses(items))
+}
+
+// ListDrafts handles GET /api/admin/content/drafts.
+// Requires session authentication and either sports_director or super_admin role.
+// Does NOT require Origin validation because GET requests do not perform state-changing side effects.
+// Sets Cache-Control: no-store on all draft responses.
+// Supports an optional 'kind' query parameter ('announcement' or 'achievement').
+// Invalid kind parameter values return HTTP 400 Bad Request.
+// Returns HTTP 200 with a compact array of DraftSummaryResponse (including [] when empty).
+// Results are capped at the latest 50 drafts sorted by updated_at DESC, id ASC (pagination deferred).
+func (h *Handler) ListDrafts(c *fiber.Ctx) error {
+	c.Set("Cache-Control", "no-store")
+	c.Set("Pragma", "no-cache")
+
+	rawKind := c.Query("kind")
+	var kindFilter Kind
+	if rawKind != "" {
+		kindFilter = Kind(rawKind)
+		if err := ValidateKind(kindFilter); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+				Error: fmt.Sprintf("invalid kind query parameter: %v", err),
+			})
+		}
+	}
+
+	ctx, cancel := requestContext(c, h.queryTimeout)
+	defer cancel()
+
+	drafts, err := h.repo.ListDrafts(ctx, kindFilter)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			log.Printf("[WARN] Draft list query timed out after %s: %v", h.queryTimeout, err)
+			return c.Status(fiber.StatusServiceUnavailable).JSON(ErrorResponse{
+				Error: "service unavailable: request timed out",
+			})
+		}
+		log.Printf("[ERROR] Draft list query failed: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Error: "internal server error",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(ToDraftSummaryResponses(drafts))
 }
 
 // CreateDraft handles POST /api/admin/content/drafts.

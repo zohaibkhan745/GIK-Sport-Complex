@@ -22,6 +22,9 @@ const MaxTitleLength = 255
 // MaxPublishedItemsPerKind defines the maximum number of items returned by ListPublishedByKind in a single query.
 const MaxPublishedItemsPerKind = 50
 
+// MaxDraftListItems defines the maximum number of drafts returned by ListDrafts (initial cap at 50; pagination is deferred).
+const MaxDraftListItems = 50
+
 var (
 	// ErrInvalidKind is returned when an unsupported content kind is specified.
 	ErrInvalidKind = errors.New("invalid content kind")
@@ -149,6 +152,17 @@ type Draft struct {
 	CreatedAt   time.Time  `json:"createdAt"`
 	UpdatedAt   time.Time  `json:"updatedAt"`
 	PublishedAt *time.Time `json:"publishedAt,omitempty"`
+}
+
+// DraftSummary represents a compact preview of an internal draft for administrative listing.
+// It intentionally excludes the full content body, creator identity, and creation timestamp
+// to minimize network payload for dashboard and review feeds. Full text remains available via GetDraftByID.
+// Initial listing is capped at 50 records; pagination is deferred to future milestones.
+type DraftSummary struct {
+	ID        uuid.UUID `json:"id"`
+	Kind      Kind      `json:"kind"`
+	Title     *string   `json:"title"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // CreateDraftInput contains parameters for creating a new draft content item.

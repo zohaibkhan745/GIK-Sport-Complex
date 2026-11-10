@@ -9,6 +9,8 @@ vi.mock("../api", () => ({
   api: {
     getFacilities: vi.fn(),
     getFacility: vi.fn(),
+    getAnnouncements: vi.fn().mockResolvedValue([]),
+    getAchievementsFeed: vi.fn().mockResolvedValue([]),
   },
 }));
 
