@@ -18,7 +18,6 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/google/uuid"
 
 	"giki-sports-backend/internal/authentication"
 	"giki-sports-backend/internal/config"
@@ -27,6 +26,7 @@ import (
 	"giki-sports-backend/internal/facility"
 	"giki-sports-backend/internal/session"
 	"giki-sports-backend/internal/user"
+	"giki-sports-backend/internal/wallet"
 )
 
 type Facility struct {
@@ -614,6 +614,11 @@ func main() {
 		authentication.RequireAnyRole(user.RoleSportsDirector, user.RoleSuperAdmin),
 	)
 
+	// Step 11E: Sports Digital Wallet (Owner-scoped balance & recent activity reads)
+	walletService := wallet.NewService(dbPool)
+	walletHandler := wallet.NewHandler(walletService, 5*time.Second)
+	walletHandler.RegisterRoutes(api, authHandler.RequireAuth())
+
 	// Bookings
 	api.Get("/bookings", func(c *fiber.Ctx) error {
 		date := c.Query("date")
@@ -734,91 +739,21 @@ func main() {
 		return c.JSON(fiber.Map{"success": true, "message": "Booking cancelled successfully"})
 	})
 
-	// Achievements (Director of Sports Showcase)
+	// Achievements (Director of Sports Showcase - Read-only for legacy data preservation)
+	// Notice: Unauthenticated content write routes (POST /api/achievements, DELETE /api/achievements/:id)
+	// have been retired in Step 10M. Content authoring is strictly managed under /api/admin/content/drafts.
 	api.Get("/achievements", func(c *fiber.Ctx) error {
 		store.mu.RLock()
 		defer store.mu.RUnlock()
 		return c.JSON(store.Data.Achievements)
 	})
 
-	api.Post("/achievements", func(c *fiber.Ctx) error {
-		var ach Achievement
-		if err := c.BodyParser(&ach); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid achievement payload"})
-		}
-
-		if ach.Title == "" || ach.Sport == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Title and Sport are required"})
-		}
-
-		if ach.Image == "" {
-			ach.Image = "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&w=1200&q=80"
-		}
-		if ach.Date == "" {
-			ach.Date = time.Now().Format("January 2006")
-		}
-
-		ach.ID = "ach-" + uuid.New().String()[:8]
-		ach.CreatedAt = time.Now()
-
-		store.mu.Lock()
-		store.Data.Achievements = append([]Achievement{ach}, store.Data.Achievements...)
-		_ = store.saveUnsafe()
-		store.mu.Unlock()
-
-		return c.Status(fiber.StatusCreated).JSON(ach)
-	})
-
-	api.Delete("/achievements/:id", func(c *fiber.Ctx) error {
-		id := c.Params("id")
-		store.mu.Lock()
-		defer store.mu.Unlock()
-
-		var updated []Achievement
-		found := false
-		for _, a := range store.Data.Achievements {
-			if a.ID == id {
-				found = true
-			} else {
-				updated = append(updated, a)
-			}
-		}
-
-		if !found {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Achievement not found"})
-		}
-
-		store.Data.Achievements = updated
-		_ = store.saveUnsafe()
-		return c.JSON(fiber.Map{"success": true})
-	})
-
-	// Announcements
+	// Announcements (Read-only for legacy data preservation)
+	// Notice: Unauthenticated content write route (POST /api/announcements) has been retired in Step 10M.
 	api.Get("/announcements", func(c *fiber.Ctx) error {
 		store.mu.RLock()
 		defer store.mu.RUnlock()
 		return c.JSON(store.Data.Announcements)
-	})
-
-	api.Post("/announcements", func(c *fiber.Ctx) error {
-		var ann Announcement
-		if err := c.BodyParser(&ann); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
-		}
-		if ann.Title == "" || ann.Content == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Title and content required"})
-		}
-
-		ann.ID = "ann-" + uuid.New().String()[:8]
-		ann.Date = time.Now().Format("2006-01-02")
-		ann.CreatedAt = time.Now()
-
-		store.mu.Lock()
-		store.Data.Announcements = append([]Announcement{ann}, store.Data.Announcements...)
-		_ = store.saveUnsafe()
-		store.mu.Unlock()
-
-		return c.Status(fiber.StatusCreated).JSON(ann)
 	})
 
 	// Memberships

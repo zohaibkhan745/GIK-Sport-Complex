@@ -171,6 +171,43 @@ func getMigration1To4FixtureFS(t *testing.T) fs.FS {
 	}
 }
 
+// getMigration1To5FixtureFS creates an in-memory fs.FS containing migrations 00001 through 00005
+// so tests targeting migrations 1-5 remain completely isolated from subsequent migrations.
+func getMigration1To5FixtureFS(t *testing.T) fs.FS {
+	mig1Path := filepath.Join("..", "..", "migrations", "00001_create_giki_sports_schema.sql")
+	content1, err := os.ReadFile(mig1Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 1 file: %v", err)
+	}
+	mig2Path := filepath.Join("..", "..", "migrations", "00002_create_facilities_and_schedules.sql")
+	content2, err := os.ReadFile(mig2Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 2 file: %v", err)
+	}
+	mig3Path := filepath.Join("..", "..", "migrations", "00003_create_users_and_sessions.sql")
+	content3, err := os.ReadFile(mig3Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 3 file: %v", err)
+	}
+	mig4Path := filepath.Join("..", "..", "migrations", "00004_create_audit_logs.sql")
+	content4, err := os.ReadFile(mig4Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 4 file: %v", err)
+	}
+	mig5Path := filepath.Join("..", "..", "migrations", "00005_create_content_items.sql")
+	content5, err := os.ReadFile(mig5Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 5 file: %v", err)
+	}
+	return fstest.MapFS{
+		"00001_create_giki_sports_schema.sql":       &fstest.MapFile{Data: content1},
+		"00002_create_facilities_and_schedules.sql": &fstest.MapFile{Data: content2},
+		"00003_create_users_and_sessions.sql":       &fstest.MapFile{Data: content3},
+		"00004_create_audit_logs.sql":               &fstest.MapFile{Data: content4},
+		"00005_create_content_items.sql":            &fstest.MapFile{Data: content5},
+	}
+}
+
 // TestMigrationIntegration_DisposableDatabaseCycle tests migration 1's full lifecycle
 // (initial Up, repeating Up idempotency, version Status, Down reversal, and reapplying Up)
 // against an isolated disposable database using a dedicated migration 1 fixture.
@@ -1439,8 +1476,8 @@ func TestMigrationIntegration_ContentItemsLifecycle(t *testing.T) {
 		}
 	}()
 
-	migrationsDir := filepath.Join("..", "..", "migrations")
-	runner, err := NewMigrationRunnerFromDir(testDB, migrationsDir)
+	fixtureFS := getMigration1To5FixtureFS(t)
+	runner, err := NewMigrationRunner(testDB, fixtureFS)
 	if err != nil {
 		t.Fatalf("failed to initialize migration runner: %v", err)
 	}
@@ -1715,6 +1752,447 @@ func TestMigrationIntegration_ContentItemsLifecycle(t *testing.T) {
 		t.Fatalf("expected goose_db_version to be 5 after reapply Up, got %d", currentVersion)
 	}
 	t.Log("Verified: migration 5 reapplied cleanly, restoring content_items at version 5.")
+}
+
+// TestMigrationIntegration_WalletLedgerLifecycle tests migration 6's full lifecycle:
+// 1. Applying all migrations (1 through 6) on a disposable database.
+// 2. Verifying the creation of wallets, wallet_transactions, and wallet_ledger_entries tables and indexes.
+// 3. Verifying personal and system wallet creation, ownership constraints, and duplicate account rejection.
+// 4. Verifying valid paired double-entry ledger records and dynamic balance calculation.
+// 5. Verifying rejection of duplicate transaction references, zero amounts, and orphaned foreign keys.
+// 6. Verifying append-only triggers prevent UPDATE, DELETE, and TRUNCATE on transactions and ledger entries.
+// 7. Verifying ON DELETE RESTRICT protects parent user and wallet records from deletion.
+// 8. Verifying rolling back migration 6 (Down) cleanly drops wallet tables, leaves earlier tables/records intact, and sets version to 5.
+// 9. Verifying reapplying migration 6 (Up) succeeds and restores version to 6.
+func TestMigrationIntegration_WalletLedgerLifecycle(t *testing.T) {
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("integration test failed: unable to load configuration: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	maintenanceDB, err := NewSQLDB(ctx, cfg.DB)
+	if err != nil {
+		t.Fatalf("integration test failed: unable to connect to PostgreSQL server: %v", err)
+	}
+	defer maintenanceDB.Close()
+
+	disposableDBName, err := createDisposableDB(ctx, maintenanceDB, "giki_sports_disposable_wallet")
+	if err != nil {
+		t.Fatalf("failed to create disposable database: %v", err)
+	}
+
+	testDBCfg := cfg.DB
+	testDBCfg.Name = disposableDBName
+	testDB, err := NewSQLDB(ctx, testDBCfg)
+	if err != nil {
+		t.Fatalf("unable to connect to disposable database %s: %v", disposableDBName, err)
+	}
+
+	defer func() {
+		t.Logf("Cleaning up disposable test database: %s", disposableDBName)
+		_ = testDB.Close()
+
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+
+		if dropErr := dropDisposableDB(cleanupCtx, maintenanceDB, disposableDBName); dropErr != nil {
+			t.Errorf("cleanup failure: failed to drop disposable test database %s: %v", disposableDBName, dropErr)
+		}
+	}()
+
+	migrationsDir := filepath.Join("..", "..", "migrations")
+	runner, err := NewMigrationRunnerFromDir(testDB, migrationsDir)
+	if err != nil {
+		t.Fatalf("failed to initialize migration runner: %v", err)
+	}
+	defer runner.Close()
+
+	// 1. Apply all migrations (1 through 6)
+	t.Log("Applying all migrations 1 through 6 (Up)...")
+	upResults, err := runner.Up(ctx)
+	if err != nil {
+		t.Fatalf("failed to apply migrations: %v", err)
+	}
+	if len(upResults) != 6 {
+		t.Fatalf("expected 6 migrations applied, got %d", len(upResults))
+	}
+
+	// 2. Verify all three tables exist in schema giki_sports
+	for _, tableName := range []string{"wallets", "wallet_transactions", "wallet_ledger_entries"} {
+		exists, err := checkTableExists(ctx, testDB, "giki_sports", tableName)
+		if err != nil || !exists {
+			t.Fatalf("expected table giki_sports.%s to exist: %v", tableName, err)
+		}
+	}
+	t.Log("Verified: tables giki_sports.wallets, wallet_transactions, and wallet_ledger_entries exist.")
+
+	// Verify indexes exist
+	for _, idx := range []string{
+		"idx_wallets_user_personal",
+		"idx_wallets_system_name_type",
+		"idx_wallets_type_status",
+		"idx_wallet_transactions_created_at",
+		"idx_wallet_ledger_entries_wallet_created",
+		"idx_wallet_ledger_entries_transaction_id",
+	} {
+		exists, err := checkIndexExists(ctx, testDB, "giki_sports", idx)
+		if err != nil || !exists {
+			t.Fatalf("expected index %s to exist: %v", idx, err)
+		}
+	}
+	t.Log("Verified: required indexes exist.")
+
+	// 3. Seed prerequisite parent data (users and facilities) to test foreign keys and cross-table preservation
+	aliceID := "11111111-1111-1111-1111-111111111111"
+	bobID := "22222222-2222-2222-2222-222222222222"
+	facID := "33333333-3333-3333-3333-333333333333"
+
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.users (id, email, display_name, password_hash, status)
+		VALUES ($1, 'alice@giki.edu.pk', 'Alice Smith', 'fakehash1', 'active'),
+		       ($2, 'bob@giki.edu.pk', 'Bob Jones', 'fakehash2', 'active');
+	`, aliceID, bobID)
+	if err != nil {
+		t.Fatalf("failed to seed users: %v", err)
+	}
+
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.facilities (id, name, slug, status)
+		VALUES ($1, 'Padel Court 1', 'padel-court-1', 'active');
+	`, facID)
+	if err != nil {
+		t.Fatalf("failed to seed facility: %v", err)
+	}
+
+	// 4. Test Valid Wallet Creation: Personal and System accounts
+	t.Log("Testing valid personal and system wallet creation...")
+	var aliceWalletID, sysLiabilityID, sysRevenueID string
+
+	err = testDB.QueryRowContext(ctx, `
+		INSERT INTO giki_sports.wallets (user_id, name, type, status, currency)
+		VALUES ($1, 'Alice Personal', 'PERSONAL', 'ACTIVE', 'PKR')
+		RETURNING id;
+	`, aliceID).Scan(&aliceWalletID)
+	if err != nil {
+		t.Fatalf("failed to create Alice personal wallet: %v", err)
+	}
+
+	err = testDB.QueryRowContext(ctx, `
+		INSERT INTO giki_sports.wallets (user_id, name, type, status, currency)
+		VALUES (NULL, 'Cashier Clearing', 'SYS_LIABILITY', 'ACTIVE', 'PKR')
+		RETURNING id;
+	`).Scan(&sysLiabilityID)
+	if err != nil {
+		t.Fatalf("failed to create system liability wallet: %v", err)
+	}
+
+	err = testDB.QueryRowContext(ctx, `
+		INSERT INTO giki_sports.wallets (user_id, name, type, status, currency)
+		VALUES (NULL, 'Sports Revenue', 'SYS_REVENUE', 'ACTIVE', 'PKR')
+		RETURNING id;
+	`).Scan(&sysRevenueID)
+	if err != nil {
+		t.Fatalf("failed to create system revenue wallet: %v", err)
+	}
+	t.Log("Verified: personal wallet and system accounts created successfully.")
+
+	// 5. Test Duplicate Account Rejection
+	t.Log("Testing duplicate account rejection...")
+	// 5A: Duplicate personal wallet for Alice must fail
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.wallets (user_id, name, type, status, currency)
+		VALUES ($1, 'Alice Second Wallet', 'PERSONAL', 'ACTIVE', 'PKR');
+	`, aliceID)
+	if err == nil {
+		t.Fatalf("expected duplicate personal wallet for Alice to be rejected, got nil")
+	}
+
+	// 5B: Duplicate system account with identical name and type must fail
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.wallets (user_id, name, type, status, currency)
+		VALUES (NULL, 'Cashier Clearing', 'SYS_LIABILITY', 'ACTIVE', 'PKR');
+	`)
+	if err == nil {
+		t.Fatalf("expected duplicate system wallet (Cashier Clearing, SYS_LIABILITY) to be rejected, got nil")
+	}
+
+	// 5C: Different user (Bob) can create a personal wallet
+	var bobWalletID string
+	err = testDB.QueryRowContext(ctx, `
+		INSERT INTO giki_sports.wallets (user_id, name, type, status, currency)
+		VALUES ($1, 'Bob Personal', 'PERSONAL', 'ACTIVE', 'PKR')
+		RETURNING id;
+	`, bobID).Scan(&bobWalletID)
+	if err != nil {
+		t.Fatalf("expected Bob personal wallet to succeed: %v", err)
+	}
+	t.Log("Verified: duplicate personal and system accounts rejected by unique indexes.")
+
+	// 6. Test Invalid Ownership & Type/Status Constraints
+	t.Log("Testing ownership and domain CHECK constraints...")
+	// 6A: Personal wallet with NULL user_id must fail
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.wallets (user_id, name, type, status, currency)
+		VALUES (NULL, 'Orphan Personal', 'PERSONAL', 'ACTIVE', 'PKR');
+	`)
+	if err == nil {
+		t.Fatalf("expected personal wallet with NULL user_id to be rejected by ownership check, got nil")
+	}
+
+	// 6B: System wallet with non-null user_id must fail
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.wallets (user_id, name, type, status, currency)
+		VALUES ($1, 'Invalid System', 'SYS_REVENUE', 'ACTIVE', 'PKR');
+	`, bobID)
+	if err == nil {
+		t.Fatalf("expected system wallet with non-null user_id to be rejected by ownership check, got nil")
+	}
+
+	// 6C: Invalid wallet type must fail
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.wallets (user_id, name, type, status, currency)
+		VALUES ($1, 'Crypto Wallet', 'CRYPTO', 'ACTIVE', 'PKR');
+	`, bobID)
+	if err == nil {
+		t.Fatalf("expected invalid type 'CRYPTO' to be rejected by check constraint, got nil")
+	}
+
+	// 6D: Invalid wallet status must fail
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.wallets (user_id, name, type, status, currency)
+		VALUES ($1, 'Bob Wallet', 'PERSONAL', 'DESTROYED', 'PKR');
+	`, bobID)
+	if err == nil {
+		t.Fatalf("expected invalid status 'DESTROYED' to be rejected by check constraint, got nil")
+	}
+	t.Log("Verified: ownership and type/status constraints enforced.")
+
+	// 7. Test Orphaned References on Wallets and Ledger Entries
+	t.Log("Testing orphaned foreign keys...")
+	unknownUUID := "99999999-9999-9999-9999-999999999999"
+	// 7A: Wallet referencing unknown user
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.wallets (user_id, name, type, status, currency)
+		VALUES ($1, 'Ghost Wallet', 'PERSONAL', 'ACTIVE', 'PKR');
+	`, unknownUUID)
+	if err == nil {
+		t.Fatalf("expected foreign key violation for unknown user_id on wallet, got nil")
+	}
+
+	// 7B: Ledger entry referencing unknown wallet
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.wallet_ledger_entries (wallet_id, transaction_id, amount)
+		VALUES ($1, $2, 5000);
+	`, unknownUUID, unknownUUID)
+	if err == nil {
+		t.Fatalf("expected foreign key violation for unknown wallet_id, got nil")
+	}
+	t.Log("Verified: foreign key constraints prevent orphaned records.")
+
+	// 8. Test Valid Paired Entries and Derived Balance
+	t.Log("Testing valid paired double-entry records and derived balance...")
+	var tx1ID string
+	err = testDB.QueryRowContext(ctx, `
+		INSERT INTO giki_sports.wallet_transactions (type, reference_id, description)
+		VALUES ('CASHIER_CASH_TOPUP', 'REC-2026-001', 'Cashier top-up 500 PKR')
+		RETURNING id;
+	`).Scan(&tx1ID)
+	if err != nil {
+		t.Fatalf("failed to insert transaction header: %v", err)
+	}
+
+	var entry1ID, entry2ID string
+	// Debit system liability (-50,000 paisa)
+	err = testDB.QueryRowContext(ctx, `
+		INSERT INTO giki_sports.wallet_ledger_entries (wallet_id, transaction_id, amount)
+		VALUES ($1, $2, -50000)
+		RETURNING id;
+	`, sysLiabilityID, tx1ID).Scan(&entry1ID)
+	if err != nil {
+		t.Fatalf("failed to insert debit ledger entry: %v", err)
+	}
+
+	// Credit Alice personal wallet (+50,000 paisa)
+	err = testDB.QueryRowContext(ctx, `
+		INSERT INTO giki_sports.wallet_ledger_entries (wallet_id, transaction_id, amount)
+		VALUES ($1, $2, 50000)
+		RETURNING id;
+	`, aliceWalletID, tx1ID).Scan(&entry2ID)
+	if err != nil {
+		t.Fatalf("failed to insert credit ledger entry: %v", err)
+	}
+
+	// Verify zero-sum invariant for this transaction
+	var sumAmount int64
+	err = testDB.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(amount), 0)
+		FROM giki_sports.wallet_ledger_entries
+		WHERE transaction_id = $1;
+	`, tx1ID).Scan(&sumAmount)
+	if err != nil || sumAmount != 0 {
+		t.Fatalf("expected transaction entries sum to be 0, got %d, err=%v", sumAmount, err)
+	}
+
+	// Verify Alice's derived balance from ledger records (FR-05)
+	var aliceBalance int64
+	err = testDB.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(amount), 0)
+		FROM giki_sports.wallet_ledger_entries
+		WHERE wallet_id = $1;
+	`, aliceWalletID).Scan(&aliceBalance)
+	if err != nil || aliceBalance != 50000 {
+		t.Fatalf("expected Alice derived balance to be 50,000 paisa, got %d, err=%v", aliceBalance, err)
+	}
+	t.Log("Verified: paired entries sum to zero; Alice balance accurately derived as 50,000 paisa.")
+
+	// 9. Test Duplicate Transaction Reference Rejection
+	t.Log("Testing duplicate transaction reference rejection (QR-04)...")
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.wallet_transactions (type, reference_id, description)
+		VALUES ('CASHIER_CASH_TOPUP', 'REC-2026-001', 'Duplicate top-up replay');
+	`)
+	if err == nil {
+		t.Fatalf("expected duplicate transaction (CASHIER_CASH_TOPUP, REC-2026-001) to be rejected, got nil")
+	}
+	t.Log("Verified: duplicate (type, reference_id) rejected by uq_wallet_transactions_type_reference.")
+
+	// 10. Test Zero Amount Rejection
+	t.Log("Testing zero amount rejection...")
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.wallet_ledger_entries (wallet_id, transaction_id, amount)
+		VALUES ($1, $2, 0);
+	`, aliceWalletID, tx1ID)
+	if err == nil {
+		t.Fatalf("expected zero amount entry to be rejected by CHECK constraint, got nil")
+	}
+	t.Log("Verified: zero-amount entry rejected by chk_wallet_ledger_entries_amount_nonzero.")
+
+	// 11. Test Append-Only Rejection of UPDATE, DELETE, and TRUNCATE on Posted Records
+	t.Log("Testing append-only triggers on transaction headers and ledger entries...")
+
+	// 11A: UPDATE on wallet_transactions must be rejected
+	_, err = testDB.ExecContext(ctx, `
+		UPDATE giki_sports.wallet_transactions
+		SET description = 'Tampered description'
+		WHERE id = $1;
+	`, tx1ID)
+	if err == nil {
+		t.Fatalf("expected UPDATE on wallet_transactions to be rejected by append-only trigger, got nil")
+	}
+
+	// 11B: DELETE on wallet_transactions must be rejected
+	_, err = testDB.ExecContext(ctx, `
+		DELETE FROM giki_sports.wallet_transactions
+		WHERE id = $1;
+	`, tx1ID)
+	if err == nil {
+		t.Fatalf("expected DELETE on wallet_transactions to be rejected by append-only trigger, got nil")
+	}
+
+	// 11C: UPDATE on wallet_ledger_entries must be rejected
+	_, err = testDB.ExecContext(ctx, `
+		UPDATE giki_sports.wallet_ledger_entries
+		SET amount = 999999
+		WHERE id = $1;
+	`, entry2ID)
+	if err == nil {
+		t.Fatalf("expected UPDATE on wallet_ledger_entries to be rejected by append-only trigger, got nil")
+	}
+
+	// 11D: DELETE on wallet_ledger_entries must be rejected
+	_, err = testDB.ExecContext(ctx, `
+		DELETE FROM giki_sports.wallet_ledger_entries
+		WHERE id = $1;
+	`, entry2ID)
+	if err == nil {
+		t.Fatalf("expected DELETE on wallet_ledger_entries to be rejected by append-only trigger, got nil")
+	}
+
+	// 11E: TRUNCATE on wallet_ledger_entries must be rejected
+	_, err = testDB.ExecContext(ctx, `TRUNCATE TABLE giki_sports.wallet_ledger_entries;`)
+	if err == nil {
+		t.Fatalf("expected TRUNCATE on wallet_ledger_entries to be rejected by truncate guard, got nil")
+	}
+
+	// 11F: TRUNCATE on wallet_transactions must be rejected
+	_, err = testDB.ExecContext(ctx, `TRUNCATE TABLE giki_sports.wallet_transactions;`)
+	if err == nil {
+		t.Fatalf("expected TRUNCATE on wallet_transactions to be rejected by truncate guard, got nil")
+	}
+	t.Log("Verified: append-only triggers successfully blocked UPDATE, DELETE, and TRUNCATE.")
+
+	// 12. Test Restrictive Foreign Keys (ON DELETE RESTRICT)
+	t.Log("Testing ON DELETE RESTRICT on users and wallets...")
+	// Cannot delete Alice while she has a wallet
+	_, err = testDB.ExecContext(ctx, `DELETE FROM giki_sports.users WHERE id = $1;`, aliceID)
+	if err == nil {
+		t.Fatalf("expected DELETE on user with active wallet to be rejected by fk_wallets_user, got nil")
+	}
+
+	// Cannot delete Alice's wallet while ledger entries reference it
+	_, err = testDB.ExecContext(ctx, `DELETE FROM giki_sports.wallets WHERE id = $1;`, aliceWalletID)
+	if err == nil {
+		t.Fatalf("expected DELETE on wallet with ledger entries to be rejected by fk_wallet_ledger_entries_wallet, got nil")
+	}
+	t.Log("Verified: ON DELETE RESTRICT protects parent user and wallet records.")
+
+	// 13. Roll back migration 6 (Down)
+	t.Log("Rolling back migration 6 (Down)...")
+	downRes, err := runner.Down(ctx)
+	if err != nil {
+		t.Fatalf("failed to roll back migration 6: %v", err)
+	}
+	if downRes == nil {
+		t.Fatalf("expected non-nil Down result for migration 6")
+	}
+
+	// Verify wallet tables are dropped
+	for _, tableName := range []string{"wallet_ledger_entries", "wallet_transactions", "wallets"} {
+		exists, err := checkTableExists(ctx, testDB, "giki_sports", tableName)
+		if err != nil || exists {
+			t.Fatalf("expected table giki_sports.%s to be dropped after migration 6 Down, exists=%v", tableName, exists)
+		}
+	}
+
+	// Verify earlier tables (users, facilities) and their rows remain completely intact
+	var userCount, facCount int
+	err = testDB.QueryRowContext(ctx, "SELECT count(*) FROM giki_sports.users WHERE id IN ($1, $2);", aliceID, bobID).Scan(&userCount)
+	if err != nil || userCount != 2 {
+		t.Fatalf("expected user data to remain intact, got count=%d, err=%v", userCount, err)
+	}
+	err = testDB.QueryRowContext(ctx, "SELECT count(*) FROM giki_sports.facilities WHERE id = $1;", facID).Scan(&facCount)
+	if err != nil || facCount != 1 {
+		t.Fatalf("expected facility data to remain intact, got count=%d, err=%v", facCount, err)
+	}
+
+	// Verify goose_db_version is 5
+	var currentVersion int64
+	err = testDB.QueryRowContext(ctx, "SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1;").Scan(&currentVersion)
+	if err != nil || currentVersion != 5 {
+		t.Fatalf("expected goose_db_version to be 5 after migration 6 Down, got %d, err=%v", currentVersion, err)
+	}
+	t.Log("Verified: migration 6 Down cleanly dropped wallet tables; earlier tables (users, facilities) and records remain intact at version 5.")
+
+	// 14. Reapply migration 6 (Up)
+	t.Log("Reapplying migration 6 (Up)...")
+	reapplyRes, err := runner.Up(ctx)
+	if err != nil || len(reapplyRes) != 1 {
+		t.Fatalf("failed to reapply migration 6: %v", err)
+	}
+	for _, tableName := range []string{"wallets", "wallet_transactions", "wallet_ledger_entries"} {
+		exists, err := checkTableExists(ctx, testDB, "giki_sports", tableName)
+		if err != nil || !exists {
+			t.Fatalf("expected table giki_sports.%s to exist after reapply Up: %v", tableName, err)
+		}
+	}
+	err = testDB.QueryRowContext(ctx, "SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1;").Scan(&currentVersion)
+	if err != nil || currentVersion != 6 {
+		t.Fatalf("expected goose_db_version to be 6 after reapply Up, got %d", currentVersion)
+	}
+	t.Log("Verified: migration 6 reapplied cleanly, restoring wallet tables at version 6.")
 }
 
 

@@ -22,6 +22,15 @@ type Repository interface {
 	// Returns an empty slice (not nil) when no items match.
 	ListPublishedByKind(ctx context.Context, kind Kind) ([]PublishedItem, error)
 
+	// ListDrafts returns at most the latest 50 drafts matching the optional kind filter,
+	// ordered by updated_at DESC, id ASC.
+	// If kind is empty, drafts of all valid kinds are returned.
+	// If kind is non-empty, only drafts of that kind are returned (returns ErrInvalidKind if kind is invalid).
+	// Only rows with status = 'draft' are returned; published items are excluded at the SQL level.
+	// Initial listing is capped at 50 records; pagination is deferred to future work.
+	// Returns an empty slice (not nil) when no matching drafts exist.
+	ListDrafts(ctx context.Context, kind Kind) ([]DraftSummary, error)
+
 	// CreateDraft creates a new incomplete or complete draft content item and writes a
 	// content.draft.create audit log entry within a single atomic PostgreSQL transaction.
 	// Sets creator_id from the trusted actor, status to 'draft', and published_at to NULL.
@@ -109,6 +118,62 @@ func (r *PostgresRepository) ListPublishedByKind(ctx context.Context, kind Kind)
 	}
 
 	return items, nil
+}
+
+// ListDrafts queries giki_sports.content_items for draft items (status = 'draft'), optionally filtered by kind.
+// Results are ordered by updated_at DESC, id ASC and capped at 50 records. Pagination is deferred to future work.
+// Published items are excluded at the SQL level.
+func (r *PostgresRepository) ListDrafts(ctx context.Context, kind Kind) ([]DraftSummary, error) {
+	var (
+		rows pgx.Rows
+		err  error
+	)
+
+	if kind != "" {
+		if err := ValidateKind(kind); err != nil {
+			return nil, err
+		}
+		const listDraftsByKindSQL = `
+			SELECT id, kind, title, updated_at
+			FROM giki_sports.content_items
+			WHERE status = 'draft'
+			  AND kind = $1
+			ORDER BY updated_at DESC, id ASC
+			LIMIT 50;
+		`
+		rows, err = r.pool.Query(ctx, listDraftsByKindSQL, string(kind))
+	} else {
+		const listAllDraftsSQL = `
+			SELECT id, kind, title, updated_at
+			FROM giki_sports.content_items
+			WHERE status = 'draft'
+			ORDER BY updated_at DESC, id ASC
+			LIMIT 50;
+		`
+		rows, err = r.pool.Query(ctx, listAllDraftsSQL)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to list content drafts: %w", err)
+	}
+	defer rows.Close()
+
+	summaries := make([]DraftSummary, 0)
+	for rows.Next() {
+		var s DraftSummary
+		var kindStr string
+		if err := rows.Scan(&s.ID, &kindStr, &s.Title, &s.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan draft summary row: %w", err)
+		}
+		s.Kind = Kind(kindStr)
+		summaries = append(summaries, s)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading draft summary rows: %w", err)
+	}
+
+	return summaries, nil
 }
 
 // CreateDraft creates a new draft content item and records a content.draft.create audit log

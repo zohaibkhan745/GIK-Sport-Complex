@@ -9,10 +9,22 @@ import {
   type Booking,
   type CreateBookingInput,
   type AuthUser,
+  type DraftSummary,
+  type DraftFilterKind,
+  type Draft,
+  type CreateDraftInput,
+  type UpdateDraftInput,
+  type PublicContentItem,
+  type WalletMeResponse,
   parseFacilities,
   parseFacility,
   parseSchedule,
   parseAuthUser,
+  parseDraftSummaries,
+  parseDraft,
+  parsePublicContentItem,
+  parsePublicContentItems,
+  parseWalletMeResponse,
 } from "./types";
 
 const BASE_URL = "/api";
@@ -193,5 +205,100 @@ export const api = {
       body: form,
       signal: options?.signal,
     });
+  },
+
+  // -- Content Drafts (Administrative List - Step 10I) ----------------------
+  listDrafts: async (
+    kind?: DraftFilterKind,
+    options?: RequestOptions
+  ): Promise<DraftSummary[]> => {
+    const query = kind && kind !== "all" ? `?kind=${encodeURIComponent(kind)}` : "";
+    const raw = await request<unknown>(`/admin/content/drafts${query}`, {
+      signal: options?.signal,
+    });
+    return parseDraftSummaries(raw);
+  },
+
+  // -- Content Draft Operations (Step 10J) ----------------------------------
+  createDraft: async (
+    input: CreateDraftInput,
+    options?: RequestOptions
+  ): Promise<Draft> => {
+    const raw = await request<unknown>("/admin/content/drafts", {
+      method: "POST",
+      body: JSON.stringify({
+        kind: input.kind,
+        title: input.title !== undefined ? input.title : null,
+        content: input.content !== undefined ? input.content : null,
+      }),
+      signal: options?.signal,
+    });
+    return parseDraft(raw);
+  },
+
+  getDraft: async (
+    id: string,
+    options?: RequestOptions
+  ): Promise<Draft> => {
+    const encoded = encodeURIComponent(id);
+    const raw = await request<unknown>(`/admin/content/drafts/${encoded}`, {
+      signal: options?.signal,
+    });
+    return parseDraft(raw);
+  },
+
+  updateDraft: async (
+    id: string,
+    input: UpdateDraftInput,
+    options?: RequestOptions
+  ): Promise<Draft> => {
+    const encoded = encodeURIComponent(id);
+    const raw = await request<unknown>(`/admin/content/drafts/${encoded}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        title: input.title !== undefined ? input.title : null,
+        content: input.content !== undefined ? input.content : null,
+      }),
+      signal: options?.signal,
+    });
+    return parseDraft(raw);
+  },
+
+  publishDraft: async (
+    id: string,
+    options?: RequestOptions
+  ): Promise<PublicContentItem> => {
+    const encoded = encodeURIComponent(id);
+    const raw = await request<unknown>(
+      `/admin/content/drafts/${encoded}/publish`,
+      {
+        method: "POST",
+        signal: options?.signal,
+      }
+    );
+    return parsePublicContentItem(raw);
+  },
+
+  // -- Public Content Feeds (Step 10M) ---------------------------------------
+  getAnnouncements: async (options?: RequestOptions): Promise<PublicContentItem[]> => {
+    const raw = await request<unknown>("/content/announcements", {
+      signal: options?.signal,
+    });
+    return parsePublicContentItems(raw);
+  },
+
+  getAchievementsFeed: async (options?: RequestOptions): Promise<PublicContentItem[]> => {
+    const raw = await request<unknown>("/content/achievements", {
+      signal: options?.signal,
+    });
+    return parsePublicContentItems(raw);
+  },
+
+  // -- Sports Wallet (Step 11F) ---------------------------------------------
+  getMyWallet: async (options?: RequestOptions): Promise<WalletMeResponse> => {
+    const raw = await request<unknown>("/wallet/me", {
+      signal: options?.signal,
+    });
+    return parseWalletMeResponse(raw);
   },
 };

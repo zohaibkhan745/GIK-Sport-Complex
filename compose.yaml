@@ -1,0 +1,34 @@
+# GIKI Sports Complex - Local Development Docker Compose Specification
+# Dedicated project: giki-sports-complex
+# Note: The container bootstrap user (POSTGRES_USER) is intended strictly for local development.
+# Production database user privileges, connection pools, and role segregation will be defined separately.
+
+name: giki-sports-complex
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    ports:
+      # Bind exclusively to loopback interface 127.0.0.1 to avoid network exposure
+      # Defaults to port 5433 if available; configurable via DB_PORT (e.g. 5434 if 5433 is in use)
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-giki_sports_complex}
+      POSTGRES_USER: ${DB_USER:-giki_sports_app}
+      # Password is required from environment; Compose will halt if empty or unset
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set and non-empty}
+    volumes:
+      # Dedicated volume isolated from all other projects (e.g. GIKI Wallet)
+      # No initialization scripts are mounted at this stage
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  postgres_data:
+    name: giki-sports-complex_postgres_data

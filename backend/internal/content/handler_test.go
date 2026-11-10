@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ type fakeContentRepo struct {
 	items            map[content.Kind][]content.PublishedItem
 	drafts           map[uuid.UUID]*content.Draft
 	listErr          error
+	listDraftsErr    error
 	createDraftErr   error
 	getDraftErr      error
 	updateDraftErr   error
@@ -43,6 +45,50 @@ func (f *fakeContentRepo) ListPublishedByKind(ctx context.Context, kind content.
 	res, ok := f.items[kind]
 	if !ok || res == nil {
 		return make([]content.PublishedItem, 0), nil
+	}
+	return res, nil
+}
+
+func (f *fakeContentRepo) ListDrafts(ctx context.Context, kind content.Kind) ([]content.DraftSummary, error) {
+	dl, ok := ctx.Deadline()
+	f.hasDeadline = ok
+	f.observedDeadline = dl
+
+	if f.listDraftsErr != nil {
+		return nil, f.listDraftsErr
+	}
+
+	if kind != "" {
+		if err := content.ValidateKind(kind); err != nil {
+			return nil, err
+		}
+	}
+
+	res := make([]content.DraftSummary, 0)
+	for _, d := range f.drafts {
+		if d.Status != "draft" {
+			continue
+		}
+		if kind != "" && d.Kind != kind {
+			continue
+		}
+		res = append(res, content.DraftSummary{
+			ID:        d.ID,
+			Kind:      d.Kind,
+			Title:     d.Title,
+			UpdatedAt: d.UpdatedAt,
+		})
+	}
+
+	sort.Slice(res, func(i, j int) bool {
+		if res[i].UpdatedAt.Equal(res[j].UpdatedAt) {
+			return res[i].ID.String() < res[j].ID.String()
+		}
+		return res[i].UpdatedAt.After(res[j].UpdatedAt)
+	})
+
+	if len(res) > 50 {
+		res = res[:50]
 	}
 	return res, nil
 }
@@ -1174,5 +1220,255 @@ func TestHandler_PublishDraft_RejectionsAndErrors(t *testing.T) {
 	respErr, _ := app.Test(reqErr)
 	if respErr.StatusCode != fiber.StatusInternalServerError {
 		t.Errorf("expected 500 on unexpected error, got %d", respErr.StatusCode)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Step 10H: GET /api/admin/content/drafts Unit Tests
+// -----------------------------------------------------------------------------
+
+func TestHandler_ListDrafts_Success(t *testing.T) {
+	now := time.Date(2026, 11, 8, 14, 0, 0, 0, time.UTC)
+	id1 := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	id2 := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+
+	fake := &fakeContentRepo{
+		drafts: map[uuid.UUID]*content.Draft{
+			id1: {
+				ID:        id1,
+				Kind:      content.KindAnnouncement,
+				Title:     content.StringPtr("Inter-batch Table Tennis"),
+				Content:   content.StringPtr("Registration opens tomorrow."),
+				Status:    "draft",
+				CreatorID: uuid.New(),
+				CreatedAt: now.Add(-2 * time.Hour),
+				UpdatedAt: now.Add(-1 * time.Hour),
+			},
+			id2: {
+				ID:        id2,
+				Kind:      content.KindAchievement,
+				Title:     nil, // incomplete draft
+				Content:   nil,
+				Status:    "draft",
+				CreatorID: uuid.New(),
+				CreatedAt: now.Add(-3 * time.Hour),
+				UpdatedAt: now, // most recently updated
+			},
+		},
+	}
+
+	app := setupDraftTestApp(fake, 3*time.Second, samplePrincipal(user.RoleSportsDirector))
+
+	req := httptest.NewRequest("GET", "/api/admin/content/drafts", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("unexpected app.Test error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected HTTP 200, got %d", resp.StatusCode)
+	}
+
+	if cc := resp.Header.Get("Cache-Control"); cc != "no-store" {
+		t.Errorf("expected Cache-Control: no-store, got %q", cc)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
+	var summaries []content.DraftSummaryResponse
+	if err := json.Unmarshal(body, &summaries); err != nil {
+		t.Fatalf("failed to unmarshal JSON response: %v\nBody: %s", err, string(body))
+	}
+
+	if len(summaries) != 2 {
+		t.Fatalf("expected 2 draft summaries, got %d", len(summaries))
+	}
+
+	// id2 was updated most recently (now), so it should be first
+	if summaries[0].ID != id2 {
+		t.Errorf("expected first item to be %s (newest updated), got %s", id2, summaries[0].ID)
+	}
+	if summaries[0].Title != nil {
+		t.Errorf("expected first item (incomplete draft) to have null title, got %v", *summaries[0].Title)
+	}
+	if summaries[0].Kind != "achievement" {
+		t.Errorf("expected kind 'achievement', got %s", summaries[0].Kind)
+	}
+
+	if summaries[1].ID != id1 {
+		t.Errorf("expected second item to be %s, got %s", id1, summaries[1].ID)
+	}
+	if summaries[1].Title == nil || *summaries[1].Title != "Inter-batch Table Tennis" {
+		t.Errorf("expected title 'Inter-batch Table Tennis', got %v", summaries[1].Title)
+	}
+	if summaries[1].Kind != "announcement" {
+		t.Errorf("expected kind 'announcement', got %s", summaries[1].Kind)
+	}
+
+	// Verify that the body is NOT exposed in the raw JSON
+	var rawMaps []map[string]interface{}
+	_ = json.Unmarshal(body, &rawMaps)
+	for i, m := range rawMaps {
+		if _, exists := m["content"]; exists {
+			t.Errorf("summary %d exposed internal content body!", i)
+		}
+		if _, exists := m["creatorId"]; exists {
+			t.Errorf("summary %d exposed creatorId!", i)
+		}
+		if _, exists := m["status"]; exists {
+			t.Errorf("summary %d exposed status!", i)
+		}
+	}
+}
+
+func TestHandler_ListDrafts_EmptyArray(t *testing.T) {
+	fake := &fakeContentRepo{
+		drafts: make(map[uuid.UUID]*content.Draft),
+	}
+
+	app := setupDraftTestApp(fake, 3*time.Second, samplePrincipal(user.RoleSportsDirector))
+
+	req := httptest.NewRequest("GET", "/api/admin/content/drafts", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("unexpected app.Test error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected HTTP 200, got %d", resp.StatusCode)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "[]" {
+		t.Fatalf("expected strict empty JSON array '[]', got %q", string(body))
+	}
+}
+
+func TestHandler_ListDrafts_KindFilter(t *testing.T) {
+	idAnnounce := uuid.New()
+	idAchieve := uuid.New()
+
+	fake := &fakeContentRepo{
+		drafts: map[uuid.UUID]*content.Draft{
+			idAnnounce: {
+				ID:        idAnnounce,
+				Kind:      content.KindAnnouncement,
+				Title:     content.StringPtr("Announcement Draft"),
+				Status:    "draft",
+				CreatedAt: time.Now().UTC(),
+				UpdatedAt: time.Now().UTC(),
+			},
+			idAchieve: {
+				ID:        idAchieve,
+				Kind:      content.KindAchievement,
+				Title:     content.StringPtr("Achievement Draft"),
+				Status:    "draft",
+				CreatedAt: time.Now().UTC(),
+				UpdatedAt: time.Now().UTC(),
+			},
+		},
+	}
+
+	app := setupDraftTestApp(fake, 3*time.Second, samplePrincipal(user.RoleSportsDirector))
+
+	// Filter by announcement
+	reqAnnounce := httptest.NewRequest("GET", "/api/admin/content/drafts?kind=announcement", nil)
+	respAnnounce, _ := app.Test(reqAnnounce)
+	if respAnnounce.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200 for ?kind=announcement, got %d", respAnnounce.StatusCode)
+	}
+	var announceSummaries []content.DraftSummaryResponse
+	bodyAnnounce, _ := io.ReadAll(respAnnounce.Body)
+	_ = json.Unmarshal(bodyAnnounce, &announceSummaries)
+	if len(announceSummaries) != 1 || announceSummaries[0].ID != idAnnounce {
+		t.Errorf("expected only announcement draft, got: %v", announceSummaries)
+	}
+
+	// Filter by achievement
+	reqAchieve := httptest.NewRequest("GET", "/api/admin/content/drafts?kind=achievement", nil)
+	respAchieve, _ := app.Test(reqAchieve)
+	if respAchieve.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200 for ?kind=achievement, got %d", respAchieve.StatusCode)
+	}
+	var achieveSummaries []content.DraftSummaryResponse
+	bodyAchieve, _ := io.ReadAll(respAchieve.Body)
+	_ = json.Unmarshal(bodyAchieve, &achieveSummaries)
+	if len(achieveSummaries) != 1 || achieveSummaries[0].ID != idAchieve {
+		t.Errorf("expected only achievement draft, got: %v", achieveSummaries)
+	}
+}
+
+func TestHandler_ListDrafts_InvalidKind_Returns400(t *testing.T) {
+	fake := &fakeContentRepo{}
+	app := setupDraftTestApp(fake, 3*time.Second, samplePrincipal(user.RoleSportsDirector))
+
+	for _, invalidKind := range []string{"invalid", "tournament", "ANNOUNCEMENT", "achievement%20"} {
+		req := httptest.NewRequest("GET", "/api/admin/content/drafts?kind="+invalidKind, nil)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("unexpected app.Test error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Errorf("expected HTTP 400 for invalid kind %q, got %d", invalidKind, resp.StatusCode)
+		}
+	}
+}
+
+func TestHandler_ListDrafts_Errors(t *testing.T) {
+	fake := &fakeContentRepo{
+		listDraftsErr: context.DeadlineExceeded,
+	}
+
+	app := setupDraftTestApp(fake, 1*time.Second, samplePrincipal(user.RoleSportsDirector))
+
+	// 1. Timeout -> 503
+	reqTimeout := httptest.NewRequest("GET", "/api/admin/content/drafts", nil)
+	respTimeout, _ := app.Test(reqTimeout)
+	if respTimeout.StatusCode != fiber.StatusServiceUnavailable {
+		t.Errorf("expected 503 on timeout, got %d", respTimeout.StatusCode)
+	}
+
+	// 2. Unexpected error -> 500
+	fake.listDraftsErr = errors.New("database connection pool exhausted")
+	reqErr := httptest.NewRequest("GET", "/api/admin/content/drafts", nil)
+	respErr, _ := app.Test(reqErr)
+	if respErr.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("expected 500 on unexpected error, got %d", respErr.StatusCode)
+	}
+}
+
+func TestHandler_PublicContent_RejectsDirectWrites(t *testing.T) {
+	fake := &fakeContentRepo{
+		items: map[content.Kind][]content.PublishedItem{},
+	}
+	app := setupTestApp(fake, 3*time.Second)
+
+	for _, writeReq := range []struct {
+		method string
+		path   string
+	}{
+		{"POST", "/api/content/announcements"},
+		{"POST", "/api/content/achievements"},
+		{"PUT", "/api/content/announcements"},
+		{"DELETE", "/api/content/announcements"},
+		{"DELETE", "/api/content/achievements"},
+	} {
+		req := httptest.NewRequest(writeReq.method, writeReq.path, strings.NewReader(`{"title":"hack"}`))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("unexpected app.Test error for %s %s: %v", writeReq.method, writeReq.path, err)
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode != fiber.StatusMethodNotAllowed && resp.StatusCode != fiber.StatusNotFound {
+			t.Errorf("expected 404 or 405 for direct unauthenticated write %s %s, got %d",
+				writeReq.method, writeReq.path, resp.StatusCode)
+		}
 	}
 }

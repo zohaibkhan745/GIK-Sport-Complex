@@ -260,3 +260,305 @@ export interface LegacyFacility {
   coach?: Coach;
   galleryCount: number;
 }
+
+// ---------------------------------------------------------------------------
+// Content Drafts (Administrative List - Step 10I)
+// ---------------------------------------------------------------------------
+
+export type ContentKind = "announcement" | "achievement";
+
+export type DraftFilterKind = "all" | ContentKind;
+
+export interface DraftSummary {
+  id: string;
+  kind: ContentKind;
+  title: string | null;
+  updatedAt: string;
+}
+
+export function isContentKind(value: unknown): value is ContentKind {
+  return value === "announcement" || value === "achievement";
+}
+
+export function isDraftSummary(value: unknown): value is DraftSummary {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const d = value as Record<string, unknown>;
+  return (
+    typeof d.id === "string" &&
+    d.id.trim().length > 0 &&
+    isContentKind(d.kind) &&
+    (d.title === null || typeof d.title === "string") &&
+    typeof d.updatedAt === "string" &&
+    d.updatedAt.trim().length > 0 &&
+    !isNaN(Date.parse(d.updatedAt))
+  );
+}
+
+export function parseDraftSummary(value: unknown): DraftSummary {
+  if (!isDraftSummary(value)) {
+    throw new Error("Invalid draft summary response: payload does not match schema");
+  }
+  return value;
+}
+
+export function parseDraftSummaries(value: unknown): DraftSummary[] {
+  if (!Array.isArray(value)) {
+    throw new Error("Invalid drafts response: expected an array");
+  }
+  return value.map((item, index) => {
+    if (!isDraftSummary(item)) {
+      throw new Error(`Invalid draft summary at index ${index}: payload does not match schema`);
+    }
+    return item;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Content Draft Editor (Creation & Editing - Step 10J)
+// ---------------------------------------------------------------------------
+
+export interface Draft {
+  id: string;
+  kind: ContentKind;
+  title: string | null;
+  content: string | null;
+  status: string;
+  creatorId: string;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt?: string | null;
+}
+
+export interface CreateDraftInput {
+  kind: ContentKind;
+  title?: string | null;
+  content?: string | null;
+}
+
+export interface UpdateDraftInput {
+  title: string | null;
+  content: string | null;
+}
+
+export function isDraft(value: unknown): value is Draft {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const d = value as Record<string, unknown>;
+  return (
+    typeof d.id === "string" &&
+    d.id.trim().length > 0 &&
+    isContentKind(d.kind) &&
+    (d.title === null || typeof d.title === "string") &&
+    (d.content === null || typeof d.content === "string") &&
+    typeof d.status === "string" &&
+    typeof d.creatorId === "string" &&
+    typeof d.createdAt === "string" &&
+    d.createdAt.trim().length > 0 &&
+    !isNaN(Date.parse(d.createdAt)) &&
+    typeof d.updatedAt === "string" &&
+    d.updatedAt.trim().length > 0 &&
+    !isNaN(Date.parse(d.updatedAt)) &&
+    (d.publishedAt === undefined ||
+      d.publishedAt === null ||
+      (typeof d.publishedAt === "string" && !isNaN(Date.parse(d.publishedAt))))
+  );
+}
+
+export function parseDraft(value: unknown): Draft {
+  if (!isDraft(value)) {
+    throw new Error("Invalid draft response: payload does not match schema");
+  }
+  return value;
+}
+
+// ---------------------------------------------------------------------------
+// Published Content (Step 10K)
+// ---------------------------------------------------------------------------
+
+export interface PublicContentItem {
+  id: string;
+  kind: ContentKind;
+  title: string;
+  content: string;
+  publishedAt: string;
+}
+
+export function isPublicContentItem(value: unknown): value is PublicContentItem {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const p = value as Record<string, unknown>;
+  return (
+    typeof p.id === "string" &&
+    p.id.trim().length > 0 &&
+    isContentKind(p.kind) &&
+    typeof p.title === "string" &&
+    typeof p.content === "string" &&
+    typeof p.publishedAt === "string" &&
+    p.publishedAt.trim().length > 0 &&
+    !isNaN(Date.parse(p.publishedAt))
+  );
+}
+
+export function parsePublicContentItem(value: unknown): PublicContentItem {
+  if (!isPublicContentItem(value)) {
+    throw new Error("Invalid published content response: payload does not match schema");
+  }
+  return value;
+}
+
+export function parsePublicContentItems(value: unknown): PublicContentItem[] {
+  if (!Array.isArray(value)) {
+    throw new Error("Invalid content feed response: expected an array");
+  }
+  return value.map((item, index) => {
+    if (!isPublicContentItem(item)) {
+      throw new Error(`Invalid content item at index ${index}: payload does not match schema`);
+    }
+    return item;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Digital Wallet (Step 11F)
+// ---------------------------------------------------------------------------
+
+export interface WalletSummary {
+  status: string;
+  currency: string;
+  balancePaisa: string;
+}
+
+export interface WalletActivityItem {
+  entryId: string;
+  transactionId: string;
+  type: string;
+  amountPaisa: string;
+  createdAt: string;
+}
+
+export interface WalletMeResponse {
+  wallet: WalletSummary | null;
+  activity: WalletActivityItem[];
+}
+
+export function isWalletSummary(value: unknown): value is WalletSummary {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const w = value as Record<string, unknown>;
+  return (
+    typeof w.status === "string" &&
+    w.status.trim().length > 0 &&
+    typeof w.currency === "string" &&
+    w.currency.trim().length > 0 &&
+    typeof w.balancePaisa === "string" &&
+    /^-?\d+$/.test(w.balancePaisa.trim())
+  );
+}
+
+export function isWalletActivityItem(value: unknown): value is WalletActivityItem {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const a = value as Record<string, unknown>;
+  return (
+    typeof a.entryId === "string" &&
+    a.entryId.trim().length > 0 &&
+    typeof a.transactionId === "string" &&
+    a.transactionId.trim().length > 0 &&
+    typeof a.type === "string" &&
+    a.type.trim().length > 0 &&
+    typeof a.amountPaisa === "string" &&
+    /^-?\d+$/.test(a.amountPaisa.trim()) &&
+    typeof a.createdAt === "string" &&
+    a.createdAt.trim().length > 0 &&
+    !isNaN(Date.parse(a.createdAt))
+  );
+}
+
+export function isWalletMeResponse(value: unknown): value is WalletMeResponse {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const r = value as Record<string, unknown>;
+  if (r.wallet !== null && !isWalletSummary(r.wallet)) {
+    return false;
+  }
+  if (!Array.isArray(r.activity)) {
+    return false;
+  }
+  return r.activity.every((item) => isWalletActivityItem(item));
+}
+
+export function parseWalletMeResponse(value: unknown): WalletMeResponse {
+  if (!isWalletMeResponse(value)) {
+    throw new Error("Invalid wallet response: payload does not match schema");
+  }
+  return value;
+}
+
+/**
+ * Formats integer paisa represented as a decimal string into exact PKR with two decimal places.
+ * Uses BigInt arithmetic to avoid any floating-point or Number conversion.
+ *
+ * Example:
+ *  "0" -> "PKR 0.00"
+ *  "40000" -> "PKR 400.00"
+ *  "-35000" -> "-PKR 350.00"
+ *  "9007199254740992" -> "PKR 90,071,992,547,409.92"
+ */
+export function formatPaisaToPKR(
+  paisaStr: string,
+  options?: { showExplicitPositiveSign?: boolean }
+): string {
+  if (!paisaStr || !/^-?\d+$/.test(paisaStr.trim())) {
+    return "PKR 0.00";
+  }
+
+  const clean = paisaStr.trim();
+  const isNegative = clean.startsWith("-");
+  const digits = isNegative ? clean.slice(1) : clean;
+  const bigVal = BigInt(digits);
+
+  const rupees = bigVal / 100n;
+  const paisa = bigVal % 100n;
+
+  // Insert thousands comma separators into the rupee portion without float conversion
+  const rupeeStr = rupees.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const paisaStrPadded = paisa.toString().padStart(2, "0");
+
+  if (isNegative) {
+    return `-PKR ${rupeeStr}.${paisaStrPadded}`;
+  }
+  if (options?.showExplicitPositiveSign && bigVal > 0n) {
+    return `+PKR ${rupeeStr}.${paisaStrPadded}`;
+  }
+  return `PKR ${rupeeStr}.${paisaStrPadded}`;
+}
+
+/**
+ * Formats a transaction ISO-8601 timestamp string into a readable date and time.
+ */
+export function formatTransactionTimestamp(isoString: string): string {
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return isoString;
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+/**
+ * Formats transaction type string into a human-readable title.
+ */
+export function formatTransactionType(type: string): string {
+  switch (type) {
+    case "PADEL_BOOKING":
+      return "Padel Court Booking";
+    case "TOPUP":
+    case "CASHIER_CASH_TOPUP":
+      return "Wallet Top-Up";
+    default:
+      return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+}
+
+
+
+

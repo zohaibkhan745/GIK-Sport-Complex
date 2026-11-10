@@ -17,9 +17,16 @@ export function Navbar() {
 
   const links = [
     { label: "Facilities", href: "/#facilities" },
+    { label: "Announcements", href: "/#announcements" },
     { label: "Achievements", href: "/#achievements" },
     { label: "Book a slot", href: "/#facilities" },
   ];
+
+  const canManageContent = Boolean(
+    user &&
+      (user.roles.includes("sports_director") ||
+        user.roles.includes("super_admin"))
+  );
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -76,6 +83,24 @@ export function Navbar() {
               {l.label}
             </a>
           ))}
+
+          {canManageContent && (
+            <Link
+              to="/admin/content"
+              className="text-sm font-semibold text-[var(--color-navy-soft)] transition-colors hover:text-[var(--color-maroon)]"
+            >
+              Manage content
+            </Link>
+          )}
+
+          {user && (
+            <Link
+              to="/wallet"
+              className="text-sm font-semibold text-[var(--color-navy-soft)] transition-colors hover:text-[var(--color-maroon)]"
+            >
+              My wallet
+            </Link>
+          )}
 
           {/* Session check retry badge when server or network is unreachable */}
           {checkError && (
@@ -138,6 +163,26 @@ export function Navbar() {
               {l.label}
             </a>
           ))}
+
+          {canManageContent && (
+            <Link
+              to="/admin/content"
+              onClick={() => setOpen(false)}
+              className="py-2 text-sm font-semibold text-[var(--color-navy-soft)] hover:text-[var(--color-maroon)]"
+            >
+              Manage content
+            </Link>
+          )}
+
+          {user && (
+            <Link
+              to="/wallet"
+              onClick={() => setOpen(false)}
+              className="py-2 text-sm font-semibold text-[var(--color-navy-soft)] hover:text-[var(--color-maroon)]"
+            >
+              My wallet
+            </Link>
+          )}
 
           <div className="border-t border-[var(--color-border)] pt-3 mt-1 flex flex-col gap-2">
             {checkError && (

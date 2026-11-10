@@ -47,6 +47,18 @@ type DraftResponse struct {
 	PublishedAt *time.Time `json:"publishedAt,omitempty"`
 }
 
+// DraftSummaryResponse represents the compact administrative JSON payload for a draft list item.
+// It exposes only the minimal metadata required for listing (id, kind, title, updatedAt) and
+// intentionally excludes the full content body, creator details, and internal audit fields.
+// Full draft details remain accessible via GET /api/admin/content/drafts/:id.
+// Initial listing returns at most 50 items; pagination is deferred to future work.
+type DraftSummaryResponse struct {
+	ID        uuid.UUID `json:"id"`
+	Kind      string    `json:"kind"`
+	Title     *string   `json:"title"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 // ErrorResponse represents a standardized, safe JSON error payload.
 type ErrorResponse struct {
 	Error string `json:"error"`
@@ -86,4 +98,24 @@ func ToDraftResponse(d Draft) DraftResponse {
 		UpdatedAt:   d.UpdatedAt,
 		PublishedAt: d.PublishedAt,
 	}
+}
+
+// ToDraftSummaryResponse converts a domain DraftSummary into an external DraftSummaryResponse DTO.
+func ToDraftSummaryResponse(s DraftSummary) DraftSummaryResponse {
+	return DraftSummaryResponse{
+		ID:        s.ID,
+		Kind:      string(s.Kind),
+		Title:     s.Title,
+		UpdatedAt: s.UpdatedAt,
+	}
+}
+
+// ToDraftSummaryResponses converts a slice of domain DraftSummaries into external DraftSummaryResponse DTOs.
+// Guarantees an allocated non-nil empty slice ([]) if input is empty or nil.
+func ToDraftSummaryResponses(items []DraftSummary) []DraftSummaryResponse {
+	res := make([]DraftSummaryResponse, 0, len(items))
+	for _, item := range items {
+		res = append(res, ToDraftSummaryResponse(item))
+	}
+	return res
 }
