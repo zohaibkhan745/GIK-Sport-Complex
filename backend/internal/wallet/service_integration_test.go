@@ -95,8 +95,8 @@ func setupWalletIntegrationTest(t *testing.T) (*Service, func()) {
 		maintenanceDB.Close()
 		t.Fatalf("failed to apply migrations: %v", err)
 	}
-	if len(upRes) != 6 {
-		t.Fatalf("expected 6 migrations applied, got %d", len(upRes))
+	if len(upRes) < 6 {
+		t.Fatalf("expected at least 6 migrations applied, got %d", len(upRes))
 	}
 	_ = runner.Close()
 	_ = migDB.Close()

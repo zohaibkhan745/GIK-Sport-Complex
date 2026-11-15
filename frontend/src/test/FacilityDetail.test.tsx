@@ -85,6 +85,27 @@ describe("Facility Detail Page Component", () => {
     expect(screen.getByTestId("facility-detail-loading")).toBeInTheDocument();
   });
 
+  it("navigates back to the previous route when 'Go back' button is clicked", async () => {
+    vi.mocked(api.getFacility).mockResolvedValue(completeFacility);
+
+    render(
+      <MemoryRouter initialEntries={["/", "/facilities/demo-badminton-court"]} initialIndex={1}>
+        <Routes>
+          <Route path="/" element={<div data-testid="home-view">Home Page</div>} />
+          <Route path="/facilities/:slug" element={<FacilityDetail />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /go back/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /go back/i }));
+
+    expect(screen.getByTestId("home-view")).toBeInTheDocument();
+  });
+
   it("renders complete facility details, structured weekly schedules, and Asia/Karachi time notes", async () => {
     vi.mocked(api.getFacility).mockResolvedValue(completeFacility);
 

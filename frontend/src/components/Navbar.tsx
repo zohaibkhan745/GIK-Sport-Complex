@@ -19,7 +19,8 @@ export function Navbar() {
     { label: "Facilities", href: "/#facilities" },
     { label: "Announcements", href: "/#announcements" },
     { label: "Achievements", href: "/#achievements" },
-    { label: "Book a slot", href: "/#facilities" },
+    { label: "Book a slot", href: "/padel" },
+    { label: "Gym Pass", href: "/membership" },
   ];
 
   const canManageContent = Boolean(

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Navbar } from "../components/Navbar";
 import { Hero } from "../components/Hero";
-import { StatsStrip } from "../components/StatsStrip";
 import { AnnouncementsSection } from "../components/AnnouncementsSection";
 import { AchievementsSection } from "../components/AchievementsSection";
 import { FacilitiesGrid } from "../components/FacilitiesGrid";
@@ -51,17 +50,14 @@ export function Home() {
       <Navbar />
       <main className="mx-auto flex max-w-6xl flex-col gap-10 px-6 py-8">
         <Hero />
-        <StatsStrip
-          facilityCount={!isLoading && !error ? facilities.length : undefined}
-        />
-        <AnnouncementsSection />
-        <AchievementsSection />
         <FacilitiesGrid
           facilities={facilities}
           isLoading={isLoading}
           error={error}
           onRetry={loadFacilities}
         />
+        <AnnouncementsSection />
+        <AchievementsSection />
       </main>
       <div className="mx-auto max-w-6xl px-6 pb-8">
         <Footer />

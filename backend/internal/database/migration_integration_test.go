@@ -208,6 +208,98 @@ func getMigration1To5FixtureFS(t *testing.T) fs.FS {
 	}
 }
 
+// getMigration1To6FixtureFS creates an in-memory fs.FS containing migrations 00001 through 00006
+// so tests targeting migrations 1-6 remain completely isolated from subsequent migrations.
+func getMigration1To6FixtureFS(t *testing.T) fs.FS {
+	mig1Path := filepath.Join("..", "..", "migrations", "00001_create_giki_sports_schema.sql")
+	content1, err := os.ReadFile(mig1Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 1 file: %v", err)
+	}
+	mig2Path := filepath.Join("..", "..", "migrations", "00002_create_facilities_and_schedules.sql")
+	content2, err := os.ReadFile(mig2Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 2 file: %v", err)
+	}
+	mig3Path := filepath.Join("..", "..", "migrations", "00003_create_users_and_sessions.sql")
+	content3, err := os.ReadFile(mig3Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 3 file: %v", err)
+	}
+	mig4Path := filepath.Join("..", "..", "migrations", "00004_create_audit_logs.sql")
+	content4, err := os.ReadFile(mig4Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 4 file: %v", err)
+	}
+	mig5Path := filepath.Join("..", "..", "migrations", "00005_create_content_items.sql")
+	content5, err := os.ReadFile(mig5Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 5 file: %v", err)
+	}
+	mig6Path := filepath.Join("..", "..", "migrations", "00006_create_wallet_ledger.sql")
+	content6, err := os.ReadFile(mig6Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 6 file: %v", err)
+	}
+	return fstest.MapFS{
+		"00001_create_giki_sports_schema.sql":       &fstest.MapFile{Data: content1},
+		"00002_create_facilities_and_schedules.sql": &fstest.MapFile{Data: content2},
+		"00003_create_users_and_sessions.sql":       &fstest.MapFile{Data: content3},
+		"00004_create_audit_logs.sql":               &fstest.MapFile{Data: content4},
+		"00005_create_content_items.sql":            &fstest.MapFile{Data: content5},
+		"00006_create_wallet_ledger.sql":            &fstest.MapFile{Data: content6},
+	}
+}
+
+// getMigration1To7FixtureFS creates an in-memory fs.FS containing migrations 00001 through 00007
+// so tests targeting migrations 1 through 7 remain completely isolated from subsequent migrations.
+func getMigration1To7FixtureFS(t *testing.T) fs.FS {
+	mig1Path := filepath.Join("..", "..", "migrations", "00001_create_giki_sports_schema.sql")
+	content1, err := os.ReadFile(mig1Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 1 file: %v", err)
+	}
+	mig2Path := filepath.Join("..", "..", "migrations", "00002_create_facilities_and_schedules.sql")
+	content2, err := os.ReadFile(mig2Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 2 file: %v", err)
+	}
+	mig3Path := filepath.Join("..", "..", "migrations", "00003_create_users_and_sessions.sql")
+	content3, err := os.ReadFile(mig3Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 3 file: %v", err)
+	}
+	mig4Path := filepath.Join("..", "..", "migrations", "00004_create_audit_logs.sql")
+	content4, err := os.ReadFile(mig4Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 4 file: %v", err)
+	}
+	mig5Path := filepath.Join("..", "..", "migrations", "00005_create_content_items.sql")
+	content5, err := os.ReadFile(mig5Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 5 file: %v", err)
+	}
+	mig6Path := filepath.Join("..", "..", "migrations", "00006_create_wallet_ledger.sql")
+	content6, err := os.ReadFile(mig6Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 6 file: %v", err)
+	}
+	mig7Path := filepath.Join("..", "..", "migrations", "00007_create_padel_booking_tables.sql")
+	content7, err := os.ReadFile(mig7Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 7 file: %v", err)
+	}
+	return fstest.MapFS{
+		"00001_create_giki_sports_schema.sql":       &fstest.MapFile{Data: content1},
+		"00002_create_facilities_and_schedules.sql": &fstest.MapFile{Data: content2},
+		"00003_create_users_and_sessions.sql":       &fstest.MapFile{Data: content3},
+		"00004_create_audit_logs.sql":               &fstest.MapFile{Data: content4},
+		"00005_create_content_items.sql":            &fstest.MapFile{Data: content5},
+		"00006_create_wallet_ledger.sql":            &fstest.MapFile{Data: content6},
+		"00007_create_padel_booking_tables.sql":     &fstest.MapFile{Data: content7},
+	}
+}
+
 // TestMigrationIntegration_DisposableDatabaseCycle tests migration 1's full lifecycle
 // (initial Up, repeating Up idempotency, version Status, Down reversal, and reapplying Up)
 // against an isolated disposable database using a dedicated migration 1 fixture.
@@ -1803,8 +1895,8 @@ func TestMigrationIntegration_WalletLedgerLifecycle(t *testing.T) {
 		}
 	}()
 
-	migrationsDir := filepath.Join("..", "..", "migrations")
-	runner, err := NewMigrationRunnerFromDir(testDB, migrationsDir)
+	fixtureFS := getMigration1To6FixtureFS(t)
+	runner, err := NewMigrationRunner(testDB, fixtureFS)
 	if err != nil {
 		t.Fatalf("failed to initialize migration runner: %v", err)
 	}
@@ -2194,5 +2286,683 @@ func TestMigrationIntegration_WalletLedgerLifecycle(t *testing.T) {
 	}
 	t.Log("Verified: migration 6 reapplied cleanly, restoring wallet tables at version 6.")
 }
+
+// TestMigrationIntegration_PadelBookingLifecycle tests migration 7's full lifecycle:
+// 1. Applying all migrations (1 through 7) on an isolated disposable database.
+// 2. Verifying the creation of padel_slots and padel_bookings tables, foreign keys, and indexes.
+// 3. Verifying slot creation, default 60-min durations, and check constraints (price, time range, status, hold consistency).
+// 4. Verifying hold state transitions and rejection of invalid holds.
+// 5. Verifying booking creation, positive fee constraints, check-in code, and user-scoped idempotency keys (QR-04).
+// 6. Verifying double-booking prevention via the partial unique index uq_active_slot_booking (QR-01).
+// 7. Verifying historical cancellation preservation: a CANCELLED booking frees the slot for subsequent active booking.
+// 8. Verifying ON DELETE RESTRICT protects parent facilities, slots, and users from deletion.
+// 9. Verifying rolling back migration 7 (Down) cleanly drops padel tables, leaves earlier tables intact, and sets version to 6.
+// 10. Verifying reapplying migration 7 (Up) succeeds and restores version to 7.
+func TestMigrationIntegration_PadelBookingLifecycle(t *testing.T) {
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("integration test failed: unable to load configuration: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	maintenanceDB, err := NewSQLDB(ctx, cfg.DB)
+	if err != nil {
+		t.Fatalf("integration test failed: unable to connect to PostgreSQL server: %v", err)
+	}
+	defer maintenanceDB.Close()
+
+	disposableDBName, err := createDisposableDB(ctx, maintenanceDB, "giki_sports_disposable_padel")
+	if err != nil {
+		t.Fatalf("failed to create disposable database: %v", err)
+	}
+
+	testDBCfg := cfg.DB
+	testDBCfg.Name = disposableDBName
+	testDB, err := NewSQLDB(ctx, testDBCfg)
+	if err != nil {
+		t.Fatalf("unable to connect to disposable database %s: %v", disposableDBName, err)
+	}
+
+	defer func() {
+		t.Logf("Cleaning up disposable test database: %s", disposableDBName)
+		_ = testDB.Close()
+
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+
+		if dropErr := dropDisposableDB(cleanupCtx, maintenanceDB, disposableDBName); dropErr != nil {
+			t.Errorf("cleanup failure: failed to drop disposable test database %s: %v", disposableDBName, dropErr)
+		}
+	}()
+
+	fixtureFS := getMigration1To7FixtureFS(t)
+	runner, err := NewMigrationRunner(testDB, fixtureFS)
+	if err != nil {
+		t.Fatalf("failed to initialize migration runner: %v", err)
+	}
+	defer runner.Close()
+
+	// 1. Apply all migrations (1 through 7)
+	t.Log("Applying all migrations 1 through 7 (Up)...")
+	upResults, err := runner.Up(ctx)
+	if err != nil {
+		t.Fatalf("failed to apply migrations: %v", err)
+	}
+	if len(upResults) != 7 {
+		t.Fatalf("expected 7 migrations applied, got %d", len(upResults))
+	}
+
+	// 2. Verify tables exist in schema giki_sports
+	for _, tableName := range []string{"padel_slots", "padel_bookings"} {
+		exists, err := checkTableExists(ctx, testDB, "giki_sports", tableName)
+		if err != nil || !exists {
+			t.Fatalf("expected table giki_sports.%s to exist: %v", tableName, err)
+		}
+	}
+	t.Log("Verified: tables giki_sports.padel_slots and padel_bookings exist.")
+
+	// 3. Verify indexes exist
+	expectedIndexes := []string{
+		"idx_padel_slots_facility_start",
+		"idx_padel_slots_held_expiry",
+		"idx_padel_slots_status",
+		"uq_padel_slots_facility_start_time",
+		"uq_active_slot_booking",
+		"uq_padel_bookings_user_idempotency",
+		"idx_padel_bookings_user_status",
+		"idx_padel_bookings_slot",
+		"idx_padel_bookings_check_in_code",
+	}
+	for _, idxName := range expectedIndexes {
+		exists, err := checkIndexExists(ctx, testDB, "giki_sports", idxName)
+		if err != nil || !exists {
+			t.Fatalf("expected index giki_sports.%s to exist: %v", idxName, err)
+		}
+	}
+	t.Log("Verified: all padel slot and booking indexes exist.")
+
+	// 4. Insert test fixtures (facility, users, wallets, transaction)
+	facID := "f0000000-0000-0000-0000-000000000001"
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.facilities (id, slug, name, status)
+		VALUES ($1, 'padel-court-1', 'Campus Padel Court 1', 'active');
+	`, facID)
+	if err != nil {
+		t.Fatalf("failed to insert facility fixture: %v", err)
+	}
+
+	aliceID := "a0000000-0000-0000-0000-000000000001"
+	bobID := "b0000000-0000-0000-0000-000000000002"
+	directorID := "d0000000-0000-0000-0000-000000000003"
+	for _, u := range []struct {
+		id, email, name, role string
+	}{
+		{aliceID, "alice@example.test", "Alice Student", "student"},
+		{bobID, "bob@example.test", "Bob Student", "student"},
+		{directorID, "director@example.test", "Director Smith", "sports_director"},
+	} {
+		_, err = testDB.ExecContext(ctx, `
+			INSERT INTO giki_sports.users (id, email, display_name, password_hash, status)
+			VALUES ($1, $2, $3, 'fakehash', 'active');
+		`, u.id, u.email, u.name)
+		if err != nil {
+			t.Fatalf("failed to insert user fixture %s: %v", u.name, err)
+		}
+		_, err = testDB.ExecContext(ctx, `
+			INSERT INTO giki_sports.user_roles (user_id, role)
+			VALUES ($1, $2);
+		`, u.id, u.role)
+		if err != nil {
+			t.Fatalf("failed to insert user role fixture %s: %v", u.name, err)
+		}
+	}
+
+	// Insert test transaction header for debit reference
+	txID := "c0000000-0000-0000-0000-000000000001"
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.wallet_transactions (id, type, reference_id, description)
+		VALUES ($1, 'PADEL_BOOKING', 'PADEL_REF_001', 'Padel slot booking debit');
+	`, txID)
+	if err != nil {
+		t.Fatalf("failed to insert wallet transaction fixture: %v", err)
+	}
+
+	// 5. Test valid slot insertion (default 60-minute duration, 100,000 paisa)
+	slotID := "e0000000-0000-0000-0000-000000000001"
+	now := time.Now().UTC().Truncate(time.Hour)
+	startTime := now.Add(24 * time.Hour)
+	endTime := startTime.Add(60 * time.Minute)
+
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_slots (id, facility_id, start_time, end_time, status, price_paisa)
+		VALUES ($1, $2, $3, $4, 'AVAILABLE', 100000);
+	`, slotID, facID, startTime, endTime)
+	if err != nil {
+		t.Fatalf("failed to insert valid padel slot: %v", err)
+	}
+	t.Log("Verified: valid 60-min padel slot inserted with price 100,000 paisa.")
+
+	// 6. Test Slot Check Constraints
+	// 6a. Invalid time range (end_time <= start_time)
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_slots (facility_id, start_time, end_time, status, price_paisa)
+		VALUES ($1, $2, $3, 'AVAILABLE', 100000);
+	`, facID, endTime, startTime)
+	if err == nil {
+		t.Fatalf("expected error for start_time >= end_time, got nil")
+	}
+
+	// 6b. Negative price
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_slots (facility_id, start_time, end_time, status, price_paisa)
+		VALUES ($1, $2, $3, 'AVAILABLE', -500);
+	`, facID, startTime.Add(2*time.Hour), endTime.Add(2*time.Hour))
+	if err == nil {
+		t.Fatalf("expected error for negative price_paisa, got nil")
+	}
+
+	// 6c. Invalid status
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_slots (facility_id, start_time, end_time, status, price_paisa)
+		VALUES ($1, $2, $3, 'UNKNOWN_STATUS', 100000);
+	`, facID, startTime.Add(2*time.Hour), endTime.Add(2*time.Hour))
+	if err == nil {
+		t.Fatalf("expected error for invalid status, got nil")
+	}
+
+	// 6d. Hold consistency (status = 'HELD' without holder_id)
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_slots (facility_id, start_time, end_time, status, price_paisa, holder_id, hold_expires_at)
+		VALUES ($1, $2, $3, 'HELD', 100000, NULL, now() + interval '5 minutes');
+	`, facID, startTime.Add(2*time.Hour), endTime.Add(2*time.Hour))
+	if err == nil {
+		t.Fatalf("expected error for HELD slot without holder_id, got nil")
+	}
+
+	// 6e. Duplicate facility and start_time
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_slots (facility_id, start_time, end_time, status, price_paisa)
+		VALUES ($1, $2, $3, 'AVAILABLE', 100000);
+	`, facID, startTime, endTime)
+	if err == nil {
+		t.Fatalf("expected unique constraint error for duplicate facility and start_time, got nil")
+	}
+	t.Log("Verified: padel_slots check constraints (time, price, status, hold consistency, uniqueness) enforce data integrity.")
+
+	// 7. Test Hold Transition
+	holdExpiresAt := time.Now().UTC().Add(5 * time.Minute)
+	_, err = testDB.ExecContext(ctx, `
+		UPDATE giki_sports.padel_slots
+		SET status = 'HELD', holder_id = $1, hold_expires_at = $2, updated_at = now()
+		WHERE id = $3;
+	`, aliceID, holdExpiresAt, slotID)
+	if err != nil {
+		t.Fatalf("failed to transition slot to HELD: %v", err)
+	}
+	t.Log("Verified: slot transitioned to HELD with holder and expiry timestamp.")
+
+	// 8. Test Booking Check Constraints
+	bookingID1 := "b0000000-0000-0000-0000-000000000001"
+	// 8a. Fee <= 0 rejected
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_bookings (slot_id, user_id, status, fee_paisa, idempotency_key, check_in_code)
+		VALUES ($1, $2, 'CONFIRMED', 0, 'idem-fail-fee', '1234');
+	`, slotID, aliceID)
+	if err == nil {
+		t.Fatalf("expected error for fee_paisa <= 0, got nil")
+	}
+
+	// 8b. Invalid booking status
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_bookings (slot_id, user_id, status, fee_paisa, idempotency_key, check_in_code)
+		VALUES ($1, $2, 'INVALID_BOOKING_STATUS', 100000, 'idem-fail-status', '1234');
+	`, slotID, aliceID)
+	if err == nil {
+		t.Fatalf("expected error for invalid booking status, got nil")
+	}
+
+	// 8c. CHECKED_IN without checked_in_at
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_bookings (slot_id, user_id, status, fee_paisa, idempotency_key, check_in_code, checked_in_at)
+		VALUES ($1, $2, 'CHECKED_IN', 100000, 'idem-fail-checkin', '1234', NULL);
+	`, slotID, aliceID)
+	if err == nil {
+		t.Fatalf("expected error for CHECKED_IN without checked_in_at, got nil")
+	}
+
+	// 8d. CANCELLED without cancelled_at
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_bookings (slot_id, user_id, status, fee_paisa, idempotency_key, check_in_code, cancelled_at)
+		VALUES ($1, $2, 'CANCELLED', 100000, 'idem-fail-cancel', '1234', NULL);
+	`, slotID, aliceID)
+	if err == nil {
+		t.Fatalf("expected error for CANCELLED without cancelled_at, got nil")
+	}
+
+	// 8e. Blank check_in_code
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_bookings (slot_id, user_id, status, fee_paisa, idempotency_key, check_in_code)
+		VALUES ($1, $2, 'CONFIRMED', 100000, 'idem-fail-code', '   ');
+	`, slotID, aliceID)
+	if err == nil {
+		t.Fatalf("expected error for blank check_in_code, got nil")
+	}
+
+	// 9. Confirm Booking 1 (Alice)
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_bookings (id, slot_id, user_id, status, fee_paisa, idempotency_key, check_in_code, debit_transaction_id)
+		VALUES ($1, $2, $3, 'CONFIRMED', 100000, 'alice-idempotency-key-1', '4829', $4);
+	`, bookingID1, slotID, aliceID, txID)
+	if err != nil {
+		t.Fatalf("failed to insert confirmed booking: %v", err)
+	}
+
+	// Update slot status to BOOKED
+	_, err = testDB.ExecContext(ctx, `
+		UPDATE giki_sports.padel_slots
+		SET status = 'BOOKED', holder_id = NULL, hold_expires_at = NULL, updated_at = now()
+		WHERE id = $1;
+	`, slotID)
+	if err != nil {
+		t.Fatalf("failed to update slot to BOOKED: %v", err)
+	}
+	t.Log("Verified: Booking 1 confirmed and slot marked BOOKED.")
+
+	// 10. QR-01 Invariant: Double-Booking Prevention via uq_active_slot_booking
+	bookingID2 := "b0000000-0000-0000-0000-000000000002"
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_bookings (id, slot_id, user_id, status, fee_paisa, idempotency_key, check_in_code)
+		VALUES ($1, $2, $3, 'CONFIRMED', 100000, 'bob-idempotency-key-2', '7731');
+	`, bookingID2, slotID, bobID)
+	if err == nil {
+		t.Fatalf("QR-01 violation: expected duplicate active booking on same slot to fail, got nil")
+	}
+	t.Log("Verified (QR-01): partial unique index uq_active_slot_booking strictly rejects duplicate confirmed booking on same slot.")
+
+	// 11. QR-04 Idempotency Key Replay Guard
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_bookings (slot_id, user_id, status, fee_paisa, idempotency_key, check_in_code)
+		VALUES ($1, $2, 'CONFIRMED', 100000, 'alice-idempotency-key-1', '9999');
+	`, slotID, aliceID)
+	if err == nil {
+		t.Fatalf("QR-04 violation: expected duplicate user idempotency key to fail, got nil")
+	}
+	t.Log("Verified (QR-04): unique constraint uq_padel_bookings_user_idempotency rejects repeated key for same user.")
+
+	// 12. Historical Cancellation & Slot Re-booking
+	// Cancel Booking 1 (Admin cancellation)
+	_, err = testDB.ExecContext(ctx, `
+		UPDATE giki_sports.padel_bookings
+		SET status = 'CANCELLED', cancelled_at = now(), cancelled_by = $1, cancellation_reason = 'Admin test cancellation'
+		WHERE id = $2;
+	`, directorID, bookingID1)
+	if err != nil {
+		t.Fatalf("failed to cancel booking 1: %v", err)
+	}
+
+	// Release slot back to AVAILABLE
+	_, err = testDB.ExecContext(ctx, `
+		UPDATE giki_sports.padel_slots
+		SET status = 'AVAILABLE', updated_at = now()
+		WHERE id = $1;
+	`, slotID)
+	if err != nil {
+		t.Fatalf("failed to release slot: %v", err)
+	}
+
+	// Now that Booking 1 is CANCELLED, Booking 2 (Bob) on the SAME slot must SUCCEED!
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.padel_bookings (id, slot_id, user_id, status, fee_paisa, idempotency_key, check_in_code)
+		VALUES ($1, $2, $3, 'CONFIRMED', 100000, 'bob-idempotency-key-2', '7731');
+	`, bookingID2, slotID, bobID)
+	if err != nil {
+		t.Fatalf("failed to insert new booking after cancellation: %v", err)
+	}
+	t.Log("Verified: CANCELLED historical booking does not block subsequent active booking on the same slot.")
+
+	// 13. Attendant Check-In
+	_, err = testDB.ExecContext(ctx, `
+		UPDATE giki_sports.padel_bookings
+		SET status = 'CHECKED_IN', checked_in_at = now(), checked_in_by = $1, updated_at = now()
+		WHERE id = $2;
+	`, directorID, bookingID2)
+	if err != nil {
+		t.Fatalf("failed to check in booking: %v", err)
+	}
+	t.Log("Verified: booking status transitioned to CHECKED_IN with attendant audit fields.")
+
+	// 14. ON DELETE RESTRICT foreign key protection
+	// Attempt deleting slot with existing bookings
+	_, err = testDB.ExecContext(ctx, `DELETE FROM giki_sports.padel_slots WHERE id = $1;`, slotID)
+	if err == nil {
+		t.Fatalf("expected ON DELETE RESTRICT error when deleting referenced slot, got nil")
+	}
+
+	// Attempt deleting facility with existing slots
+	_, err = testDB.ExecContext(ctx, `DELETE FROM giki_sports.facilities WHERE id = $1;`, facID)
+	if err == nil {
+		t.Fatalf("expected ON DELETE RESTRICT error when deleting referenced facility, got nil")
+	}
+
+	// Attempt deleting user with existing bookings
+	_, err = testDB.ExecContext(ctx, `DELETE FROM giki_sports.users WHERE id = $1;`, bobID)
+	if err == nil {
+		t.Fatalf("expected ON DELETE RESTRICT error when deleting referenced user, got nil")
+	}
+	t.Log("Verified: ON DELETE RESTRICT protects parent slots, facilities, and users from accidental deletion.")
+
+	// 15. Roll back migration 7 (Down)
+	t.Log("Rolling back migration 7 (Down)...")
+	downRes, err := runner.Down(ctx)
+	if err != nil {
+		t.Fatalf("failed to roll back migration 7: %v", err)
+	}
+	if downRes == nil {
+		t.Fatalf("expected non-nil Down result for migration 7")
+	}
+
+	// Verify padel tables are dropped
+	for _, tableName := range []string{"padel_bookings", "padel_slots"} {
+		exists, err := checkTableExists(ctx, testDB, "giki_sports", tableName)
+		if err != nil || exists {
+			t.Fatalf("expected table giki_sports.%s to be dropped after migration 7 Down, exists=%v", tableName, exists)
+		}
+	}
+
+	// Verify earlier tables (wallets, users, facilities) and their data remain intact
+	var userCount, facCount int
+	err = testDB.QueryRowContext(ctx, "SELECT count(*) FROM giki_sports.users WHERE id IN ($1, $2, $3);", aliceID, bobID, directorID).Scan(&userCount)
+	if err != nil || userCount != 3 {
+		t.Fatalf("expected user records to remain intact, got count=%d, err=%v", userCount, err)
+	}
+	err = testDB.QueryRowContext(ctx, "SELECT count(*) FROM giki_sports.facilities WHERE id = $1;", facID).Scan(&facCount)
+	if err != nil || facCount != 1 {
+		t.Fatalf("expected facility records to remain intact, got count=%d, err=%v", facCount, err)
+	}
+
+	// Verify goose_db_version is 6
+	var currentVersion int64
+	err = testDB.QueryRowContext(ctx, "SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1;").Scan(&currentVersion)
+	if err != nil || currentVersion != 6 {
+		t.Fatalf("expected goose_db_version to be 6 after migration 7 Down, got %d, err=%v", currentVersion, err)
+	}
+	t.Log("Verified: migration 7 Down cleanly dropped padel tables; earlier tables and records remain intact at version 6.")
+
+	// 16. Reapply migration 7 (Up)
+	t.Log("Reapplying migration 7 (Up)...")
+	reapplyRes, err := runner.Up(ctx)
+	if err != nil || len(reapplyRes) != 1 {
+		t.Fatalf("failed to reapply migration 7: %v", err)
+	}
+	for _, tableName := range []string{"padel_slots", "padel_bookings"} {
+		exists, err := checkTableExists(ctx, testDB, "giki_sports", tableName)
+		if err != nil || !exists {
+			t.Fatalf("expected table giki_sports.%s to exist after reapply Up: %v", tableName, err)
+		}
+	}
+	err = testDB.QueryRowContext(ctx, "SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1;").Scan(&currentVersion)
+	if err != nil || currentVersion != 7 {
+		t.Fatalf("expected goose_db_version to be 7 after reapply Up, got %d", currentVersion)
+	}
+	t.Log("Verified: migration 7 reapplied cleanly, restoring padel tables at version 7.")
+}
+
+// TestMigrationIntegration_GymMembershipLifecycle tests migration 8's full lifecycle:
+// 1. Applying all migrations (1 through 8) on an isolated disposable database.
+// 2. Verifying the creation of gym_memberships table, foreign keys, and indexes.
+// 3. Verifying pass creation, 30-day terms, and check constraints (price, time range, status, plan type).
+// 4. Verifying user-scoped idempotency unique constraint (QR-04).
+// 5. Verifying ON DELETE RESTRICT on users and wallet_transactions.
+// 6. Verifying rolling back migration 8 (Down) cleanly drops gym_memberships table, leaves earlier tables intact, and sets version to 7.
+// 7. Verifying reapplying migration 8 (Up) succeeds and restores version to 8.
+func TestMigrationIntegration_GymMembershipLifecycle(t *testing.T) {
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("integration test failed: unable to load configuration: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	maintenanceDB, err := NewSQLDB(ctx, cfg.DB)
+	if err != nil {
+		t.Fatalf("integration test failed: unable to connect to PostgreSQL server: %v", err)
+	}
+	defer maintenanceDB.Close()
+
+	disposableDBName, err := createDisposableDB(ctx, maintenanceDB, "giki_sports_disposable_gym")
+	if err != nil {
+		t.Fatalf("failed to create disposable database: %v", err)
+	}
+
+	testDBCfg := cfg.DB
+	testDBCfg.Name = disposableDBName
+	testDB, err := NewSQLDB(ctx, testDBCfg)
+	if err != nil {
+		t.Fatalf("unable to connect to disposable database %s: %v", disposableDBName, err)
+	}
+
+	defer func() {
+		t.Logf("Cleaning up disposable test database: %s", disposableDBName)
+		_ = testDB.Close()
+
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+
+		if dropErr := dropDisposableDB(cleanupCtx, maintenanceDB, disposableDBName); dropErr != nil {
+			t.Errorf("cleanup failure: failed to drop disposable test database %s: %v", disposableDBName, dropErr)
+		}
+	}()
+
+	migrationsDir := filepath.Join("..", "..", "migrations")
+	runner, err := NewMigrationRunnerFromDir(testDB, migrationsDir)
+	if err != nil {
+		t.Fatalf("failed to initialize migration runner: %v", err)
+	}
+	defer runner.Close()
+
+	// 1. Apply all migrations (1 through 8)
+	t.Log("Applying all migrations 1 through 8 (Up)...")
+	upResults, err := runner.Up(ctx)
+	if err != nil {
+		t.Fatalf("failed to apply migrations: %v", err)
+	}
+	if len(upResults) != 8 {
+		t.Fatalf("expected 8 migrations applied, got %d", len(upResults))
+	}
+
+	// 2. Verify table exists in schema giki_sports
+	exists, err := checkTableExists(ctx, testDB, "giki_sports", "gym_memberships")
+	if err != nil || !exists {
+		t.Fatalf("expected table giki_sports.gym_memberships to exist: %v", err)
+	}
+	t.Log("Verified: table giki_sports.gym_memberships exists.")
+
+	// 3. Verify indexes exist
+	expectedIndexes := []string{
+		"idx_gym_memberships_user_status_end",
+		"idx_gym_memberships_status_end",
+		"idx_gym_memberships_debit_tx",
+	}
+	for _, idx := range expectedIndexes {
+		idxExists, err := checkIndexExists(ctx, testDB, "giki_sports", idx)
+		if err != nil || !idxExists {
+			t.Fatalf("expected index giki_sports.%s to exist: %v", idx, err)
+		}
+	}
+	t.Log("Verified: all gym membership indexes exist.")
+
+	// 4. Seed user, wallet, and transaction fixtures
+	var aliceID, bobID string
+	err = testDB.QueryRowContext(ctx, `
+		INSERT INTO giki_sports.users (email, display_name, password_hash, status)
+		VALUES ('alice.gym@giki.edu.pk', 'Alice Gym', 'argon2id_hash_1', 'active')
+		RETURNING id;
+	`).Scan(&aliceID)
+	if err != nil {
+		t.Fatalf("failed to insert alice: %v", err)
+	}
+
+	err = testDB.QueryRowContext(ctx, `
+		INSERT INTO giki_sports.users (email, display_name, password_hash, status)
+		VALUES ('bob.gym@giki.edu.pk', 'Bob Gym', 'argon2id_hash_2', 'active')
+		RETURNING id;
+	`).Scan(&bobID)
+	if err != nil {
+		t.Fatalf("failed to insert bob: %v", err)
+	}
+
+	var txID string
+	err = testDB.QueryRowContext(ctx, `
+		INSERT INTO giki_sports.wallet_transactions (type, reference_id, description)
+		VALUES ('GYM_MEMBERSHIP', 'gym-ref-001', 'Initial Gym Pass')
+		RETURNING id;
+	`).Scan(&txID)
+	if err != nil {
+		t.Fatalf("failed to insert wallet transaction: %v", err)
+	}
+
+	// 5. Insert valid 30-day gym membership pass
+	now := time.Now().UTC()
+	start := now
+	end := now.Add(30 * 24 * time.Hour)
+
+	var mbrID string
+	err = testDB.QueryRowContext(ctx, `
+		INSERT INTO giki_sports.gym_memberships (
+			user_id, plan_type, status, start_time, end_time, price_paisa, debit_transaction_id, idempotency_key
+		) VALUES ($1, 'STANDARD_30_DAY', 'ACTIVE', $2, $3, 300000, $4, 'idem-gym-1')
+		RETURNING id;
+	`, aliceID, start, end, txID).Scan(&mbrID)
+	if err != nil {
+		t.Fatalf("failed to insert valid gym membership: %v", err)
+	}
+	t.Logf("Verified: valid 30-day gym membership inserted: %s", mbrID)
+
+	// 6. Test check constraint: start_time < end_time
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.gym_memberships (
+			user_id, plan_type, status, start_time, end_time, price_paisa, debit_transaction_id, idempotency_key
+		) VALUES ($1, 'STANDARD_30_DAY', 'ACTIVE', $2, $3, 300000, $4, 'idem-gym-bad-time')
+	`, aliceID, end, start, txID)
+	if err == nil {
+		t.Fatalf("expected error on inverted start/end times, got nil")
+	}
+
+	// 7. Test check constraint: price_paisa >= 0
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.gym_memberships (
+			user_id, plan_type, status, start_time, end_time, price_paisa, debit_transaction_id, idempotency_key
+		) VALUES ($1, 'STANDARD_30_DAY', 'ACTIVE', $2, $3, -500, $4, 'idem-gym-bad-price')
+	`, aliceID, start, end, txID)
+	if err == nil {
+		t.Fatalf("expected error on negative price, got nil")
+	}
+
+	// 8. Test check constraint: status valid
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.gym_memberships (
+			user_id, plan_type, status, start_time, end_time, price_paisa, debit_transaction_id, idempotency_key
+		) VALUES ($1, 'STANDARD_30_DAY', 'PENDING', $2, $3, 300000, $4, 'idem-gym-bad-status')
+	`, aliceID, start, end, txID)
+	if err == nil {
+		t.Fatalf("expected error on invalid status, got nil")
+	}
+
+	// 9. Test check constraint: plan_type valid
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.gym_memberships (
+			user_id, plan_type, status, start_time, end_time, price_paisa, debit_transaction_id, idempotency_key
+		) VALUES ($1, 'LIFETIME_VIP', 'ACTIVE', $2, $3, 300000, $4, 'idem-gym-bad-plan')
+	`, aliceID, start, end, txID)
+	if err == nil {
+		t.Fatalf("expected error on invalid plan_type, got nil")
+	}
+
+	// 10. Test unique idempotency constraint: (user_id, idempotency_key)
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.gym_memberships (
+			user_id, plan_type, status, start_time, end_time, price_paisa, debit_transaction_id, idempotency_key
+		) VALUES ($1, 'STANDARD_30_DAY', 'ACTIVE', $2, $3, 300000, $4, 'idem-gym-1')
+	`, aliceID, start, end, txID)
+	if err == nil {
+		t.Fatalf("expected error on duplicate (user_id, idempotency_key), got nil")
+	}
+
+	// Different user with same idempotency key is allowed
+	_, err = testDB.ExecContext(ctx, `
+		INSERT INTO giki_sports.gym_memberships (
+			user_id, plan_type, status, start_time, end_time, price_paisa, debit_transaction_id, idempotency_key
+		) VALUES ($1, 'STANDARD_30_DAY', 'ACTIVE', $2, $3, 300000, $4, 'idem-gym-1')
+	`, bobID, start, end, txID)
+	if err != nil {
+		t.Fatalf("expected success when different user uses same idempotency key, got: %v", err)
+	}
+	t.Log("Verified (QR-04): unique constraint uq_gym_memberships_user_idempotency enforces per-user replay protection.")
+
+	// 11. Foreign key ON DELETE RESTRICT on user
+	_, err = testDB.ExecContext(ctx, `DELETE FROM giki_sports.users WHERE id = $1;`, aliceID)
+	if err == nil {
+		t.Fatalf("expected ON DELETE RESTRICT error when deleting referenced user, got nil")
+	}
+
+	// 12. Foreign key ON DELETE RESTRICT on wallet_transactions
+	_, err = testDB.ExecContext(ctx, `DELETE FROM giki_sports.wallet_transactions WHERE id = $1;`, txID)
+	if err == nil {
+		t.Fatalf("expected ON DELETE RESTRICT error when deleting referenced wallet transaction, got nil")
+	}
+	t.Log("Verified: ON DELETE RESTRICT protects referenced users and wallet transactions.")
+
+	// 13. Roll back migration 8 (Down)
+	t.Log("Rolling back migration 8 (Down)...")
+	downRes, err := runner.Down(ctx)
+	if err != nil {
+		t.Fatalf("failed to roll back migration 8: %v", err)
+	}
+	if downRes == nil {
+		t.Fatalf("expected non-nil Down result for migration 8")
+	}
+
+	// Verify gym_memberships table is dropped
+	exists, err = checkTableExists(ctx, testDB, "giki_sports", "gym_memberships")
+	if err != nil || exists {
+		t.Fatalf("expected table giki_sports.gym_memberships to be dropped after migration 8 Down, exists=%v", exists)
+	}
+
+	// Verify earlier tables (padel_slots, wallets, users) remain intact
+	for _, tableName := range []string{"padel_slots", "padel_bookings", "wallets", "users"} {
+		exists, err = checkTableExists(ctx, testDB, "giki_sports", tableName)
+		if err != nil || !exists {
+			t.Fatalf("expected table giki_sports.%s to remain intact after migration 8 Down", tableName)
+		}
+	}
+
+	// Verify goose_db_version is 7
+	var currentVersion int64
+	err = testDB.QueryRowContext(ctx, "SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1;").Scan(&currentVersion)
+	if err != nil || currentVersion != 7 {
+		t.Fatalf("expected goose_db_version to be 7 after migration 8 Down, got %d, err=%v", currentVersion, err)
+	}
+	t.Log("Verified: migration 8 Down cleanly dropped gym_memberships; earlier tables and records remain intact at version 7.")
+
+	// 14. Reapply migration 8 (Up)
+	t.Log("Reapplying migration 8 (Up)...")
+	reapplyRes, err := runner.Up(ctx)
+	if err != nil || len(reapplyRes) != 1 {
+		t.Fatalf("failed to reapply migration 8: %v", err)
+	}
+	exists, err = checkTableExists(ctx, testDB, "giki_sports", "gym_memberships")
+	if err != nil || !exists {
+		t.Fatalf("expected table giki_sports.gym_memberships to exist after reapply Up: %v", err)
+	}
+	err = testDB.QueryRowContext(ctx, "SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1;").Scan(&currentVersion)
+	if err != nil || currentVersion != 8 {
+		t.Fatalf("expected goose_db_version to be 8 after reapply Up, got %d", currentVersion)
+	}
+	t.Log("Verified: migration 8 reapplied cleanly, restoring gym_memberships at version 8.")
+}
+
 
 

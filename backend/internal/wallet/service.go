@@ -72,21 +72,21 @@ func (s *Service) PostTransaction(ctx context.Context, params TransferParams) (u
 // was freshly created or matched an existing idempotent transaction header.
 //
 // Invariants enforced:
-// 1. Validates inputs: amount must be positive integer paisa; sender != receiver; type and reference non-empty.
-// 2. Replay check: pre-flight check on committed references allows sequential safe replays to return immediately.
-// 3. Row locking: locks both wallets with SELECT ... FOR UPDATE in deterministic lexicographical UUID order to
-//    eliminate opposite-order wallet lock cycles (AB/BA deadlocks on the wallets table).
-// 4. Account verification: both wallets must exist, have status = 'ACTIVE', and share the same currency.
-// 5. Unique reference resolution before funds check: executes INSERT ... ON CONFLICT (type, reference_id) DO NOTHING.
-//    If another concurrent transaction has already claimed this reference, PostgreSQL blocks on the unique index until
-//    that transaction completes. Upon commit, the losing request receives 0 rows without aborting the transaction block,
-//    reads the winner's committed transfer, and returns either the original transaction ID (if identical) or
-//    ErrTransactionConflict (if parameters differ), even if the sender currently has zero balance.
-// 6. Balance derivation: for new references, sender's balance is dynamically derived inside the locked transaction
-//    as SUM(amount) across historical ledger entries. If a personal wallet lacks funds, tx is rolled back, leaving
-//    no header or entries in the database.
-// 7. Paired entries: inserts one negative debit entry for the sender (-amount) and one positive credit entry for receiver (+amount).
-// 8. Atomic commit: rolls back the entire transaction if any query fails. Returns transaction ID only after commit.
+//  1. Validates inputs: amount must be positive integer paisa; sender != receiver; type and reference non-empty.
+//  2. Replay check: pre-flight check on committed references allows sequential safe replays to return immediately.
+//  3. Row locking: locks both wallets with SELECT ... FOR UPDATE in deterministic lexicographical UUID order to
+//     eliminate opposite-order wallet lock cycles (AB/BA deadlocks on the wallets table).
+//  4. Account verification: both wallets must exist, have status = 'ACTIVE', and share the same currency.
+//  5. Unique reference resolution before funds check: executes INSERT ... ON CONFLICT (type, reference_id) DO NOTHING.
+//     If another concurrent transaction has already claimed this reference, PostgreSQL blocks on the unique index until
+//     that transaction completes. Upon commit, the losing request receives 0 rows without aborting the transaction block,
+//     reads the winner's committed transfer, and returns either the original transaction ID (if identical) or
+//     ErrTransactionConflict (if parameters differ), even if the sender currently has zero balance.
+//  6. Balance derivation: for new references, sender's balance is dynamically derived inside the locked transaction
+//     as SUM(amount) across historical ledger entries. If a personal wallet lacks funds, tx is rolled back, leaving
+//     no header or entries in the database.
+//  7. Paired entries: inserts one negative debit entry for the sender (-amount) and one positive credit entry for receiver (+amount).
+//  8. Atomic commit: rolls back the entire transaction if any query fails. Returns transaction ID only after commit.
 func (s *Service) PostTransactionWithResult(ctx context.Context, params TransferParams) (*PostResult, error) {
 	// 1. Validate transfer parameters
 	if params.SenderWalletID == uuid.Nil || params.ReceiverWalletID == uuid.Nil {
@@ -128,6 +128,28 @@ func (s *Service) PostTransactionWithResult(ctx context.Context, params Transfer
 		_ = tx.Rollback(ctx)
 	}()
 
+	res, err := s.PostTransactionTx(ctx, tx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	// Synchronization hook for deterministic concurrent test verification
+	if s.beforeCommitHook != nil {
+		s.beforeCommitHook(ctx)
+	}
+
+	// 10. Commit transaction
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Return transaction ID only after commit
+	return res, nil
+}
+
+// PostTransactionTx executes the transfer within the provided PostgreSQL transaction WITHOUT committing it.
+// Callers coordinating multiple transactional operations must commit or roll back the provided transaction.
+func (s *Service) PostTransactionTx(ctx context.Context, tx pgx.Tx, params TransferParams) (*PostResult, error) {
 	// 4. Determine deterministic locking order to eliminate opposite-order wallet lock cycles (AB/BA deadlocks on the wallets table)
 	firstID, secondID := params.SenderWalletID, params.ReceiverWalletID
 	if strings.Compare(firstID.String(), secondID.String()) > 0 {
@@ -248,17 +270,6 @@ func (s *Service) PostTransactionWithResult(ctx context.Context, params Transfer
 		return nil, fmt.Errorf("failed to insert receiver ledger entry: %w", err)
 	}
 
-	// Synchronization hook for deterministic concurrent test verification
-	if s.beforeCommitHook != nil {
-		s.beforeCommitHook(ctx)
-	}
-
-	// 10. Commit transaction
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	// Return transaction ID only after commit
 	return &PostResult{TransactionID: txID, AlreadyPosted: false}, nil
 }
 
@@ -506,4 +517,126 @@ func (s *Service) GetUserWalletHistory(ctx context.Context, userID uuid.UUID) ([
 	}
 
 	return items, nil
+}
+
+// FindOrCreateSystemWallet finds or inserts an active system account identified by name and type.
+func (s *Service) FindOrCreateSystemWallet(ctx context.Context, name string, wType WalletType, currency string) (uuid.UUID, error) {
+	if currency == "" {
+		currency = "PKR"
+	}
+	var id uuid.UUID
+	err := s.pool.QueryRow(ctx, `
+		SELECT id
+		FROM giki_sports.wallets
+		WHERE name = $1 AND type = $2 AND user_id IS NULL;
+	`, name, string(wType)).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, fmt.Errorf("failed to check system wallet %s: %w", name, err)
+	}
+
+	err = s.pool.QueryRow(ctx, `
+		INSERT INTO giki_sports.wallets (user_id, name, type, status, currency)
+		VALUES (NULL, $1, $2, 'ACTIVE', $3)
+		ON CONFLICT (name, type) WHERE user_id IS NULL DO NOTHING
+		RETURNING id;
+	`, name, string(wType), currency).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+
+	// In case of concurrent creation, query again
+	err = s.pool.QueryRow(ctx, `
+		SELECT id
+		FROM giki_sports.wallets
+		WHERE name = $1 AND type = $2 AND user_id IS NULL;
+	`, name, string(wType)).Scan(&id)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to resolve system wallet %s: %w", name, err)
+	}
+	return id, nil
+}
+
+// FindPersonalWallet finds the active personal wallet for the specified user.
+func (s *Service) FindPersonalWallet(ctx context.Context, userID uuid.UUID) (uuid.UUID, error) {
+	var id uuid.UUID
+	var status WalletStatus
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, status
+		FROM giki_sports.wallets
+		WHERE user_id = $1 AND type = 'PERSONAL';
+	`, userID).Scan(&id, &status)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, ErrWalletNotFound
+		}
+		return uuid.Nil, fmt.Errorf("failed to query personal wallet: %w", err)
+	}
+	if status != WalletStatusActive {
+		return uuid.Nil, ErrWalletInactive
+	}
+	return id, nil
+}
+
+// FindOrCreateSystemWalletTx finds or inserts an active system account identified by name and type using the provided transaction.
+func (s *Service) FindOrCreateSystemWalletTx(ctx context.Context, tx pgx.Tx, name string, wType WalletType, currency string) (uuid.UUID, error) {
+	if currency == "" {
+		currency = "PKR"
+	}
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `
+		SELECT id
+		FROM giki_sports.wallets
+		WHERE name = $1 AND type = $2 AND user_id IS NULL;
+	`, name, string(wType)).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, fmt.Errorf("failed to check system wallet %s: %w", name, err)
+	}
+
+	err = tx.QueryRow(ctx, `
+		INSERT INTO giki_sports.wallets (user_id, name, type, status, currency)
+		VALUES (NULL, $1, $2, 'ACTIVE', $3)
+		ON CONFLICT (name, type) WHERE user_id IS NULL DO NOTHING
+		RETURNING id;
+	`, name, string(wType), currency).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+
+	// In case of concurrent creation, query again
+	err = tx.QueryRow(ctx, `
+		SELECT id
+		FROM giki_sports.wallets
+		WHERE name = $1 AND type = $2 AND user_id IS NULL;
+	`, name, string(wType)).Scan(&id)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to resolve system wallet %s: %w", name, err)
+	}
+	return id, nil
+}
+
+// FindPersonalWalletTx finds the active personal wallet for the specified user within the provided transaction.
+func (s *Service) FindPersonalWalletTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (uuid.UUID, error) {
+	var id uuid.UUID
+	var status WalletStatus
+	err := tx.QueryRow(ctx, `
+		SELECT id, status
+		FROM giki_sports.wallets
+		WHERE user_id = $1 AND type = 'PERSONAL';
+	`, userID).Scan(&id, &status)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, ErrWalletNotFound
+		}
+		return uuid.Nil, fmt.Errorf("failed to query personal wallet: %w", err)
+	}
+	if status != WalletStatusActive {
+		return uuid.Nil, ErrWalletInactive
+	}
+	return id, nil
 }

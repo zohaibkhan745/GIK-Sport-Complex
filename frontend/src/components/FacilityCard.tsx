@@ -1,8 +1,39 @@
-import { Link } from "react-router-dom";
-import { ArrowRight, Activity, MapPin } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowRight, Activity, MapPin, Dumbbell } from "lucide-react";
 import type { Facility } from "../types";
 
+export type FacilityAccessModel = "padel" | "gym" | "timetable";
+
+export function getFacilityAccessModel(facility: { slug: string; name: string }): FacilityAccessModel {
+  const s = facility.slug.toLowerCase();
+  const n = facility.name.toLowerCase();
+  if (s.includes("padel") || n.includes("padel")) {
+    return "padel";
+  }
+  if (
+    s.includes("gym") ||
+    s.includes("fitness") ||
+    n.includes("gym") ||
+    n.includes("fitness")
+  ) {
+    return "gym";
+  }
+  return "timetable";
+}
+
 export function FacilityCard({ facility }: { facility: Facility }) {
+  const navigate = useNavigate();
+  const accessModel = getFacilityAccessModel(facility);
+
+  const handleCardClick = (e: React.MouseEvent<HTMLElement>) => {
+    // If the click is inside an explicit interactive link or button (e.g., Book Court, Get Pass, or an anchor tag), don't intercept it
+    const target = e.target as HTMLElement;
+    if (target.closest("a, button")) {
+      return;
+    }
+    navigate(`/facilities/${facility.slug}`);
+  };
+
   const statusLabels: Record<string, { label: string; badgeClass: string }> = {
     active: {
       label: "Active",
@@ -24,22 +55,42 @@ export function FacilityCard({ facility }: { facility: Facility }) {
   };
 
   return (
-    <Link
-      to={`/facilities/${facility.slug}`}
-      className="group flex flex-col justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-colors hover:border-[var(--color-gold)]"
+    <article
+      data-testid={`facility-card-${facility.slug}`}
+      onClick={handleCardClick}
+      className="group flex flex-col justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-all hover:border-[var(--color-gold)] hover:shadow-md cursor-pointer"
     >
       <div>
-        <div className="flex items-center justify-between">
-          <Activity size={22} className="text-[var(--color-maroon)]" />
-          <span
-            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusInfo.badgeClass}`}
-          >
-            {statusInfo.label}
-          </span>
+        {/* Top header row: Category Icon + Status Badge (only if non-active) */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white border border-[var(--color-border)] text-[var(--color-maroon)] shadow-2xs">
+            {accessModel === "padel" ? (
+              <Activity size={20} className="text-[var(--color-maroon)]" />
+            ) : accessModel === "gym" ? (
+              <Dumbbell size={20} className="text-[var(--color-navy)]" />
+            ) : (
+              <Activity size={20} className="text-[var(--color-maroon)]" />
+            )}
+          </div>
+
+          {facility.status !== "active" && (
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusInfo.badgeClass}`}
+            >
+              {statusInfo.label}
+            </span>
+          )}
         </div>
-        <p className="mt-2.5 text-sm font-semibold text-[var(--color-navy)]">
+
+        {/* Facility Name (with clickable link to detail page) */}
+        <Link
+          to={`/facilities/${facility.slug}`}
+          className="mt-3 block text-sm font-semibold text-[var(--color-navy)] hover:text-[var(--color-maroon)] transition-colors"
+        >
           {facility.name}
-        </p>
+        </Link>
+
+        {/* Location & Timetable meta */}
         {facility.location ? (
           <p className="mt-1 flex items-center gap-1 text-xs text-[var(--color-navy-soft)]">
             <MapPin size={11} className="flex-shrink-0" />
@@ -53,13 +104,54 @@ export function FacilityCard({ facility }: { facility: Facility }) {
           </p>
         )}
       </div>
-      <div className="mt-3 flex items-center gap-1 text-xs font-medium text-[var(--color-maroon)]">
-        View Schedule
-        <ArrowRight
-          size={13}
-          className="transition-transform group-hover:translate-x-0.5"
-        />
+
+      {/* Action Area: Context-specific based on access model */}
+      <div className="mt-4 pt-3 border-t border-[var(--color-border)]/60">
+        {accessModel === "padel" ? (
+          <div className="flex items-center justify-between gap-2">
+            <Link
+              to={`/padel?facility=${encodeURIComponent(facility.slug)}`}
+              className="inline-flex items-center gap-1 rounded-md bg-[var(--color-maroon)] px-2.5 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              Book Court
+              <ArrowRight size={12} />
+            </Link>
+            <Link
+              to={`/facilities/${facility.slug}`}
+              className="text-xs font-medium text-[var(--color-navy-soft)] hover:text-[var(--color-maroon)]"
+            >
+              Schedule
+            </Link>
+          </div>
+        ) : accessModel === "gym" ? (
+          <div className="flex items-center justify-between gap-2">
+            <Link
+              to="/membership"
+              className="inline-flex items-center gap-1 rounded-md bg-[var(--color-navy)] px-2.5 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              Get Pass
+              <ArrowRight size={12} />
+            </Link>
+            <Link
+              to={`/facilities/${facility.slug}`}
+              className="text-xs font-medium text-[var(--color-navy-soft)] hover:text-[var(--color-maroon)]"
+            >
+              Schedule
+            </Link>
+          </div>
+        ) : (
+          <Link
+            to={`/facilities/${facility.slug}`}
+            className="flex items-center justify-between text-xs font-medium text-[var(--color-maroon)] hover:underline"
+          >
+            <span>View Schedule</span>
+            <ArrowRight
+              size={13}
+              className="transition-transform group-hover:translate-x-0.5"
+            />
+          </Link>
+        )}
       </div>
-    </Link>
+    </article>
   );
 }

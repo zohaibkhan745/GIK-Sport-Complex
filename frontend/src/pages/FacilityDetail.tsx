@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Activity,
@@ -12,6 +12,7 @@ import {
   Trash2,
   AlertTriangle,
   Plus,
+  ArrowRight,
 } from "lucide-react";
 import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
@@ -73,8 +74,19 @@ function sortSchedules(schedules: Schedule[]): Schedule[] {
 
 export function FacilityDetail() {
   const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [facility, setFacility] = useState<Facility | null>(null);
+
+  const handleGoBack = useCallback(() => {
+    if (window.history.state && typeof window.history.state.idx === "number" && window.history.state.idx > 0) {
+      navigate(-1);
+    } else if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/#facilities");
+    }
+  }, [navigate]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<{ status: number; message: string } | null>(
     null
@@ -601,13 +613,15 @@ export function FacilityDetail() {
     <div className="min-h-screen bg-white">
       <Navbar />
       <main className="mx-auto max-w-3xl px-6 py-8">
-        <Link
-          to="/#facilities"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--color-maroon)] transition-opacity hover:opacity-80"
+        <button
+          type="button"
+          onClick={handleGoBack}
+          aria-label="Go back"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--color-maroon)] transition-opacity hover:opacity-80 cursor-pointer"
         >
           <ArrowLeft size={16} />
-          Back to facilities
-        </Link>
+          Go back
+        </button>
 
         {isLoading && (
           <div
@@ -634,12 +648,13 @@ export function FacilityDetail() {
               No facility matching slug &ldquo;{slug}&rdquo; could be found in
               the database.
             </p>
-            <Link
-              to="/#facilities"
-              className="mt-5 inline-block rounded-md bg-[var(--color-maroon)] px-5 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+            <button
+              type="button"
+              onClick={handleGoBack}
+              className="mt-5 inline-block rounded-md bg-[var(--color-maroon)] px-5 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
             >
-              Back to facilities
-            </Link>
+              Go back
+            </button>
           </div>
         )}
 
@@ -718,6 +733,80 @@ export function FacilityDetail() {
                 </p>
               </div>
             </div>
+
+            {/* Access Model Action Banners: Padel Online Reservation & Gym Membership */}
+            {Boolean(
+              facility.slug.toLowerCase().includes("padel") ||
+                facility.name.toLowerCase().includes("padel")
+            ) && (
+              <div
+                data-testid="padel-booking-banner"
+                className="mt-6 rounded-xl border border-emerald-300 bg-emerald-50/80 p-4 text-emerald-950 shadow-2xs"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="font-display text-sm font-bold text-emerald-950">
+                      Online Court Booking Available
+                    </h2>
+                    <p className="mt-0.5 text-xs text-emerald-800">
+                      Reserve 60-minute match slots with student wallet checkout and QR check-in.
+                    </p>
+                  </div>
+                  <Link
+                    to={`/padel?facility=${encodeURIComponent(facility.slug)}`}
+                    className="inline-flex flex-shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-maroon)] px-4 py-2 text-xs font-semibold text-white shadow-2xs transition-all hover:bg-[#6b1420] active:scale-98"
+                  >
+                    <span>Book Court Slot</span>
+                    <ArrowRight size={13} />
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {Boolean(
+              facility.slug.toLowerCase().includes("gym") ||
+                facility.slug.toLowerCase().includes("fitness") ||
+                facility.name.toLowerCase().includes("gym") ||
+                facility.name.toLowerCase().includes("fitness")
+            ) && (
+              <div
+                data-testid="gym-membership-banner"
+                className="mt-6 rounded-xl border border-indigo-200 bg-indigo-50/80 p-4 text-indigo-950 shadow-2xs"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-display text-sm font-bold text-indigo-950">
+                        Gym Membership Pass Required
+                      </h2>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-indigo-900 border border-indigo-200">
+                        PKR 3,000 / 30 Days
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-indigo-800">
+                      Full floor access with automatic 30-day validity tracking and instant renewal.
+                    </p>
+                  </div>
+                  <Link
+                    to="/membership"
+                    className="inline-flex flex-shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-navy)] px-4 py-2 text-xs font-semibold text-white shadow-2xs transition-all hover:bg-[#002244] active:scale-98"
+                  >
+                    <span>Get / Renew Pass</span>
+                    <ArrowRight size={13} />
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {facility.schedules.some((s) => s.audience === "women_only") && (
+              <div
+                data-testid="women-only-hours-callout"
+                className="mt-3.5 flex items-center gap-2 rounded-lg border border-purple-200 bg-purple-50/70 px-3.5 py-2 text-xs text-purple-900"
+              >
+                <span className="font-semibold text-purple-800">Women-Only Hours:</span>
+                <span>Designated weekly operating windows reserved for female students and staff. See timetable below.</span>
+              </div>
+            )}
 
             {/* Weekly Timetable */}
             <section className="mt-8">

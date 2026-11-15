@@ -351,13 +351,11 @@ describe("My Sports Wallet Page Component (Step 11F)", () => {
       </MemoryRouter>
     );
 
-    // Wait for user to be authenticated in Navbar
+    // Wait for user to be authenticated in Navbar and wallet request to be initiated
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Sign Out" })).toBeInTheDocument();
+      expect(api.getMyWallet).toHaveBeenCalledTimes(1);
     });
-
-    // getMyWallet was called and is pending
-    expect(api.getMyWallet).toHaveBeenCalledTimes(1);
 
     // User signs out via Navbar
     const signOutBtn = screen.getByRole("button", { name: "Sign Out" });

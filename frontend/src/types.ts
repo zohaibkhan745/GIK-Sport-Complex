@@ -500,9 +500,13 @@ export function parseWalletMeResponse(value: unknown): WalletMeResponse {
  *  "9007199254740992" -> "PKR 90,071,992,547,409.92"
  */
 export function formatPaisaToPKR(
-  paisaStr: string,
+  paisaInput: string | number | bigint,
   options?: { showExplicitPositiveSign?: boolean }
 ): string {
+  if (paisaInput === null || paisaInput === undefined) {
+    return "PKR 0.00";
+  }
+  const paisaStr = String(paisaInput);
   if (!paisaStr || !/^-?\d+$/.test(paisaStr.trim())) {
     return "PKR 0.00";
   }
@@ -551,6 +555,8 @@ export function formatTransactionType(type: string): string {
   switch (type) {
     case "PADEL_BOOKING":
       return "Padel Court Booking";
+    case "PADEL_REFUND":
+      return "Padel Booking Refund";
     case "TOPUP":
     case "CASHIER_CASH_TOPUP":
       return "Wallet Top-Up";
@@ -558,6 +564,146 @@ export function formatTransactionType(type: string): string {
       return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   }
 }
+
+// ---------------------------------------------------------------------------
+// Padel Court Booking (Step 12I)
+// ---------------------------------------------------------------------------
+
+export interface PadelFacility {
+  id: string;
+  slug: string;
+  name: string;
+  status: string;
+}
+
+export type PadelSlotStatus = "AVAILABLE" | "HELD" | "BOOKED" | "BLOCKED";
+
+export interface PadelSlot {
+  id: string;
+  facilityId: string;
+  startTime: string;
+  endTime: string;
+  status: PadelSlotStatus;
+  pricePaisa: string;
+  isHoldExpired: boolean;
+  holdExpiresAt: string | null;
+  heldByCaller: boolean;
+}
+
+export interface PadelSlotsResponse {
+  date: string;
+  facility: PadelFacility | null;
+  slots: PadelSlot[];
+}
+
+export interface PadelHoldResponse {
+  id: string;
+  status: string;
+  holdExpiresAt: string | null;
+  heldByCaller: boolean;
+}
+
+export interface PadelCheckoutResponse {
+  bookingId: string;
+  slotId: string;
+  facilityId: string;
+  facilityName?: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  feePaisa: string;
+  checkInCode: string;
+  debitTransactionId?: string;
+  createdAt: string;
+  alreadyBooked?: boolean;
+}
+
+export interface PadelVerifyTicketResponse {
+  bookingId: string;
+  slotId: string;
+  facilityId: string;
+  facilityName?: string;
+  userId: string;
+  userEmail?: string;
+  userName?: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  feePaisa: string;
+  checkInCode: string;
+  checkedInAt: string;
+  checkedInBy: string;
+}
+
+export interface PadelCancelResponse {
+  bookingId: string;
+  slotId: string;
+  userId: string;
+  status: string;
+  feePaisa: string;
+  refundTransactionId: string;
+  cancelledAt: string;
+  cancelledBy: string;
+  reason?: string;
+  message: string;
+}
+
+export function isPadelSlot(value: unknown): value is PadelSlot {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const s = value as Record<string, unknown>;
+  return (
+    typeof s.id === "string" &&
+    s.id.trim().length > 0 &&
+    typeof s.facilityId === "string" &&
+    typeof s.startTime === "string" &&
+    typeof s.endTime === "string" &&
+    typeof s.status === "string" &&
+    typeof s.pricePaisa === "string"
+  );
+}
+
+export function isPadelSlotsResponse(value: unknown): value is PadelSlotsResponse {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const r = value as Record<string, unknown>;
+  if (typeof r.date !== "string") return false;
+  if (!Array.isArray(r.slots)) return false;
+  return r.slots.every((slot) => isPadelSlot(slot));
+}
+
+export function parsePadelSlotsResponse(value: unknown): PadelSlotsResponse {
+  if (!isPadelSlotsResponse(value)) {
+    throw new Error("Invalid padel slots response: payload does not match schema");
+  }
+  return value;
+}
+
+// -- Gym Membership (Phase 7 / Step 7C) ---------------------------------------
+export type GymMembershipStatus = "ACTIVE" | "EXPIRED" | "CANCELLED";
+export type GymPlanType = "STANDARD_30_DAY";
+
+export interface GymMembership {
+  id: string;
+  userId: string;
+  planType: GymPlanType;
+  status: GymMembershipStatus;
+  startTime: string;
+  endTime: string;
+  pricePaisa: number;
+  debitTransactionId: string;
+  idempotencyKey: string;
+  createdAt: string;
+}
+
+export interface GymMembershipSummary {
+  isActive: boolean;
+  currentMembership?: GymMembership;
+  effectiveExpiry?: string;
+  daysRemaining: number;
+  secondsRemaining: number;
+  history: GymMembership[];
+}
+
+
 
 
 

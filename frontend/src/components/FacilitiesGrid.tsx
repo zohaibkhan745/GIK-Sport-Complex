@@ -15,10 +15,11 @@ export function FacilitiesGrid({
   onRetry,
 }: FacilitiesGridProps) {
   return (
-    <section id="facilities">
+    <section id="facilities" aria-label="Campus Sports Facilities Directory">
+      {/* Directory Title */}
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-semibold text-[var(--color-navy)]">
-          Explore facilities
+        <h2 className="font-display text-lg font-bold text-[var(--color-navy)]">
+          Facilities
         </h2>
         {!isLoading && !error && (
           <span className="text-xs text-[var(--color-navy-soft)]">
@@ -27,10 +28,11 @@ export function FacilitiesGrid({
         )}
       </div>
 
+      {/* Loading State */}
       {isLoading && (
         <div
           data-testid="facilities-loading"
-          className="mt-3 flex items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] py-12 text-sm text-[var(--color-navy-soft)]"
+          className="mt-4 flex items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] py-12 text-sm text-[var(--color-navy-soft)]"
         >
           <div className="flex items-center gap-2">
             <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-maroon)] border-t-transparent" />
@@ -39,10 +41,11 @@ export function FacilitiesGrid({
         </div>
       )}
 
+      {/* Error State */}
       {!isLoading && error && (
         <div
           data-testid="facilities-error"
-          className="mt-3 rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-800"
+          className="mt-4 rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-800"
         >
           <p className="font-semibold">Unable to load sports facilities</p>
           <p className="mt-1 text-xs text-red-600">{error}</p>
@@ -56,10 +59,11 @@ export function FacilitiesGrid({
         </div>
       )}
 
+      {/* Zero Total Facilities in Database */}
       {!isLoading && !error && facilities.length === 0 && (
         <div
           data-testid="facilities-empty"
-          className="mt-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 text-center text-sm text-[var(--color-navy-soft)]"
+          className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 text-center text-sm text-[var(--color-navy-soft)]"
         >
           <p className="font-semibold text-[var(--color-navy)]">No facilities available</p>
           <p className="mt-1 text-xs">
@@ -68,10 +72,11 @@ export function FacilitiesGrid({
         </div>
       )}
 
+      {/* Populated Facilities Grid */}
       {!isLoading && !error && facilities.length > 0 && (
         <div
           data-testid="facilities-grid"
-          className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
+          className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
         >
           {facilities.map((f) => (
             <FacilityCard key={f.slug} facility={f} />

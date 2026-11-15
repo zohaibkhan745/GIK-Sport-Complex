@@ -16,6 +16,14 @@ import {
   type UpdateDraftInput,
   type PublicContentItem,
   type WalletMeResponse,
+  type PadelFacility,
+  type PadelSlotsResponse,
+  type PadelHoldResponse,
+  type PadelCheckoutResponse,
+  type PadelVerifyTicketResponse,
+  type PadelCancelResponse,
+  type GymMembership,
+  type GymMembershipSummary,
   parseFacilities,
   parseFacility,
   parseSchedule,
@@ -25,6 +33,7 @@ import {
   parsePublicContentItem,
   parsePublicContentItems,
   parseWalletMeResponse,
+  parsePadelSlotsResponse,
 } from "./types";
 
 const BASE_URL = "/api";
@@ -300,5 +309,144 @@ export const api = {
       signal: options?.signal,
     });
     return parseWalletMeResponse(raw);
+  },
+
+  // -- Padel Court Booking (Step 12I) ---------------------------------------
+  getPadelFacilities: async (options?: RequestOptions): Promise<PadelFacility[]> => {
+    return request<PadelFacility[]>("/padel/facilities", {
+      signal: options?.signal,
+    });
+  },
+
+  getPadelSlots: async (
+    date: string,
+    facilityId?: string,
+    options?: RequestOptions
+  ): Promise<PadelSlotsResponse> => {
+    const params = new URLSearchParams({ date });
+    if (facilityId) params.append("facility_id", facilityId);
+    const raw = await request<unknown>(`/padel/slots?${params.toString()}`, {
+      signal: options?.signal,
+    });
+    return parsePadelSlotsResponse(raw);
+  },
+
+  holdPadelSlot: async (
+    slotId: string,
+    options?: RequestOptions
+  ): Promise<PadelHoldResponse> => {
+    return request<PadelHoldResponse>(`/padel/slots/${encodeURIComponent(slotId)}/hold`, {
+      method: "POST",
+      signal: options?.signal,
+    });
+  },
+
+  releasePadelHold: async (
+    slotId: string,
+    options?: RequestOptions
+  ): Promise<PadelHoldResponse> => {
+    return request<PadelHoldResponse>(`/padel/slots/${encodeURIComponent(slotId)}/release-hold`, {
+      method: "POST",
+      signal: options?.signal,
+    });
+  },
+
+  checkoutPadelSlot: async (
+    input: { slotId: string; idempotencyKey: string },
+    options?: RequestOptions
+  ): Promise<PadelCheckoutResponse> => {
+    return request<PadelCheckoutResponse>("/padel/checkout", {
+      method: "POST",
+      body: JSON.stringify({
+        slot_id: input.slotId,
+        idempotency_key: input.idempotencyKey,
+      }),
+      signal: options?.signal,
+    });
+  },
+
+  verifyPadelTicket: async (
+    checkInCode: string,
+    bookingId?: string,
+    options?: RequestOptions
+  ): Promise<PadelVerifyTicketResponse> => {
+    return request<PadelVerifyTicketResponse>("/padel/bookings/verify-ticket", {
+      method: "POST",
+      body: JSON.stringify({
+        checkInCode,
+        ...(bookingId ? { bookingId } : {}),
+      }),
+      signal: options?.signal,
+    });
+  },
+
+  cancelPadelBooking: async (
+    bookingId: string,
+    reason?: string,
+    options?: RequestOptions
+  ): Promise<PadelCancelResponse> => {
+    return request<PadelCancelResponse>(`/admin/bookings/${encodeURIComponent(bookingId)}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason || "Administrative cancellation" }),
+      signal: options?.signal,
+    });
+  },
+
+  generatePadelSlots: async (
+    input: {
+      facility_id: string;
+      date: string;
+      start_hour?: number;
+      end_hour?: number;
+      slot_duration_minutes?: number;
+      price_paisa?: string;
+    },
+    options?: RequestOptions
+  ): Promise<unknown> => {
+    return request<unknown>("/admin/padel/slots/generate", {
+      method: "POST",
+      body: JSON.stringify(input),
+      signal: options?.signal,
+    });
+  },
+
+  // -- Gym Membership (Phase 7 / Step 7C) ------------------------------------
+  getMyGymMembership: async (options?: RequestOptions): Promise<GymMembershipSummary> => {
+    return request<GymMembershipSummary>("/memberships/me", {
+      signal: options?.signal,
+    });
+  },
+
+  purchaseGymMembership: async (
+    planType: string = "STANDARD_30_DAY",
+    idempotencyKey?: string,
+    options?: RequestOptions
+  ): Promise<GymMembership> => {
+    const key =
+      idempotencyKey ||
+      (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `gym-${Date.now()}`);
+    return request<GymMembership>("/memberships/purchase", {
+      method: "POST",
+      body: JSON.stringify({
+        planType,
+        idempotencyKey: key,
+      }),
+      signal: options?.signal,
+    });
+  },
+
+  getAdminGymMemberships: async (
+    limit: number = 50,
+    offset: number = 0,
+    options?: RequestOptions
+  ): Promise<GymMembership[]> => {
+    return request<GymMembership[]>(
+      `/admin/memberships?limit=${limit}&offset=${offset}`,
+      {
+        signal: options?.signal,
+      }
+    );
   },
 };

@@ -6,6 +6,8 @@ import { Login } from "./pages/Login";
 import { AdminContent } from "./pages/AdminContent";
 import { DraftEditor } from "./pages/DraftEditor";
 import { Wallet } from "./pages/Wallet";
+import { PadelBooking } from "./pages/PadelBooking";
+import { Membership } from "./pages/Membership";
 import { NotFound } from "./pages/NotFound";
 
 function App() {
@@ -17,6 +19,8 @@ function App() {
           {/* One reusable template renders all facilities — see
               src/data/facilities.ts for each facility's content. */}
           <Route path="/facilities/:slug" element={<FacilityDetail />} />
+          <Route path="/padel" element={<PadelBooking />} />
+          <Route path="/membership" element={<Membership />} />
           <Route path="/login" element={<Login />} />
           <Route path="/admin/content" element={<AdminContent />} />
           <Route path="/admin/content/new" element={<DraftEditor />} />

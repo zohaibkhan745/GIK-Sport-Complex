@@ -24,6 +24,8 @@ import (
 	"giki-sports-backend/internal/content"
 	"giki-sports-backend/internal/database"
 	"giki-sports-backend/internal/facility"
+	"giki-sports-backend/internal/membership"
+	"giki-sports-backend/internal/padel"
 	"giki-sports-backend/internal/session"
 	"giki-sports-backend/internal/user"
 	"giki-sports-backend/internal/wallet"
@@ -619,6 +621,42 @@ func main() {
 	walletHandler := wallet.NewHandler(walletService, 5*time.Second)
 	walletHandler.RegisterRoutes(api, authHandler.RequireAuth())
 
+	// Step 12C, 12D, 12E & 12F: Padel Court Booking Engine, UnitOfWork & Background Cleaner
+	padelRepo := padel.NewRepository(dbPool)
+	padelUoW := padel.NewUnitOfWork(dbPool, walletService)
+	padelService := padel.NewService(padelRepo, walletService, padelUoW)
+	padelHandler := padel.NewHandler(padelService, 5*time.Second)
+	padelHandler.RegisterPublicRoutes(api)
+	padelHandler.RegisterAuthenticatedRoutes(
+		api,
+		authHandler.RequireTrustedOrigin(),
+		authHandler.RequireAuth(),
+	)
+	padelHandler.RegisterAdminRoutes(
+		api,
+		authHandler.RequireTrustedOrigin(),
+		authHandler.RequireAuth(),
+		authentication.RequireAnyRole(user.RoleSportsDirector, user.RoleSuperAdmin),
+	)
+
+	// Step 12E: Start background cleaner worker to release expired holds (SE-423 §2 Table 1 No. 4)
+	padelCleaner := padel.NewHoldCleanerWorker(padelRepo, padel.CleanerConfig{
+		Interval:     30 * time.Second,
+		BatchTimeout: 5 * time.Second,
+	})
+	padelCleaner.Start()
+
+	// Phase 7 / Step 7A & 7B: 30-Day Gym Membership Management (FR-04, QR-04, QR-06, CR-06)
+	membershipRepo := membership.NewRepository(dbPool)
+	membershipService := membership.NewService(dbPool, membershipRepo, walletService, membership.SystemClock{})
+	membershipHandler := membership.NewHandler(membershipService, 5*time.Second)
+	membershipHandler.RegisterRoutes(
+		api,
+		authHandler.RequireTrustedOrigin(),
+		authHandler.RequireAuth(),
+		authentication.RequireAnyRole(user.RoleSportsDirector, user.RoleSuperAdmin),
+	)
+
 	// Bookings
 	api.Get("/bookings", func(c *fiber.Ctx) error {
 		date := c.Query("date")
@@ -756,48 +794,6 @@ func main() {
 		return c.JSON(store.Data.Announcements)
 	})
 
-	// Memberships
-	api.Get("/memberships", func(c *fiber.Ctx) error {
-		store.mu.RLock()
-		defer store.mu.RUnlock()
-		return c.JSON(store.Data.Memberships)
-	})
-
-	api.Post("/memberships", func(c *fiber.Ctx) error {
-		var req struct {
-			ApplicantName string `json:"applicantName"`
-			ApplicantID   string `json:"applicantId"`
-			ApplicantType string `json:"applicantType"`
-			Plan          string `json:"plan"`
-		}
-
-		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payload"})
-		}
-
-		if req.ApplicantName == "" || req.ApplicantID == "" || req.Plan == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing applicant details or plan"})
-		}
-
-		mbr := Membership{
-			ID:            fmt.Sprintf("MBR-%04d", rand.Intn(9000)+1000),
-			ApplicantName: req.ApplicantName,
-			ApplicantID:   strings.ToUpper(req.ApplicantID),
-			ApplicantType: req.ApplicantType,
-			Plan:          req.Plan,
-			Status:        "active",
-			ValidUntil:    time.Now().AddDate(0, 6, 0).Format("2006-01-02"),
-			CreatedAt:     time.Now(),
-		}
-
-		store.mu.Lock()
-		store.Data.Memberships = append([]Membership{mbr}, store.Data.Memberships...)
-		_ = store.saveUnsafe()
-		store.mu.Unlock()
-
-		return c.Status(fiber.StatusCreated).JSON(mbr)
-	})
-
 	// Stats endpoint for quick dashboard
 	api.Get("/stats", func(c *fiber.Ctx) error {
 		store.mu.RLock()
@@ -838,6 +834,7 @@ func main() {
 		log.Fatalf("[FATAL] Server listener error: %v", err)
 	case sig := <-sigChan:
 		log.Printf("Received signal '%s'. Initiating graceful shutdown...", sig)
+		padelCleaner.Stop()
 		if err := app.Shutdown(); err != nil {
 			log.Printf("[ERROR] Graceful shutdown error: %v", err)
 		}

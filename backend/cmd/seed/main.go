@@ -15,20 +15,23 @@ import (
 
 func main() {
 	demoFlag := flag.Bool("demo", false, "Seed demonstration facilities and recurring schedules for development")
+	campusFlag := flag.Bool("campus", false, "Seed authentic GIKI campus facilities and recurring weekly schedules")
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: seed [flags]\n\n")
 		fmt.Fprintf(os.Stderr, "Flags:\n")
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nNote: This command is strictly for local development and demonstration.\n")
-		fmt.Fprintf(os.Stderr, "It populates synthetic demonstration facilities and schedules labeled '[Demo]'.\n")
-		fmt.Fprintf(os.Stderr, "It does not represent approved institutional GIKI data.\n")
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  go run ./cmd/seed --campus         # Populate all 8 authentic GIKI campus facilities\n")
+		fmt.Fprintf(os.Stderr, "  go run ./cmd/seed --demo           # Populate synthetic demonstration fixtures\n")
+		fmt.Fprintf(os.Stderr, "  go run ./cmd/seed --campus --demo  # Populate both campus facilities and demo fixtures\n")
 	}
 	flag.Parse()
 
-	if !*demoFlag {
-		fmt.Fprintln(os.Stderr, "[ERROR] Missing required flag: --demo")
-		fmt.Fprintln(os.Stderr, "Seeding is restricted to development demo data and requires explicit opt-in.")
-		fmt.Fprintln(os.Stderr, "Usage: go run ./cmd/seed --demo")
+	if !*demoFlag && !*campusFlag {
+		fmt.Fprintln(os.Stderr, "[ERROR] Missing required flag: specify --campus, --demo, or both.")
+		fmt.Fprintln(os.Stderr, "Seeding requires explicit opt-in.")
+		fmt.Fprintln(os.Stderr, "Usage: go run ./cmd/seed --campus")
 		os.Exit(1)
 	}
 
@@ -51,15 +54,27 @@ func main() {
 	}
 	defer pool.Close()
 
-	// Step 3: Apply demonstration fixtures within an atomic transaction
-	log.Println("Applying demonstration fixtures within an atomic transaction...")
-	summary, err := seed.ApplyDemo(ctx, pool)
-	if err != nil {
-		log.Fatalf("[FATAL] Demonstration seeding failed: %v", err)
+	if *demoFlag {
+		log.Println("Applying demonstration fixtures within an atomic transaction...")
+		summary, err := seed.ApplyDemo(ctx, pool)
+		if err != nil {
+			log.Fatalf("[FATAL] Demonstration seeding failed: %v", err)
+		}
+		log.Println("✓ Demonstration seeding completed successfully.")
+		fmt.Printf("\nDemo Seed Summary:\n")
+		fmt.Printf("  Facilities: %d inserted, %d skipped\n", summary.FacilitiesInserted, summary.FacilitiesSkipped)
+		fmt.Printf("  Schedules:  %d inserted, %d skipped\n", summary.SchedulesInserted, summary.SchedulesSkipped)
 	}
 
-	log.Println("✓ Demonstration seeding completed successfully.")
-	fmt.Printf("\nSeed Summary:\n")
-	fmt.Printf("  Facilities: %d inserted, %d skipped\n", summary.FacilitiesInserted, summary.FacilitiesSkipped)
-	fmt.Printf("  Schedules:  %d inserted, %d skipped\n", summary.SchedulesInserted, summary.SchedulesSkipped)
+	if *campusFlag {
+		log.Println("Applying authentic GIKI campus facilities within an atomic transaction...")
+		summary, err := seed.ApplyCampus(ctx, pool)
+		if err != nil {
+			log.Fatalf("[FATAL] Campus facility seeding failed: %v", err)
+		}
+		log.Println("✓ Campus facility seeding completed successfully.")
+		fmt.Printf("\nCampus Seed Summary:\n")
+		fmt.Printf("  Facilities: %d inserted, %d skipped\n", summary.FacilitiesInserted, summary.FacilitiesSkipped)
+		fmt.Printf("  Schedules:  %d inserted, %d skipped\n", summary.SchedulesInserted, summary.SchedulesSkipped)
+	}
 }
