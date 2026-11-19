@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import {
   ArrowLeft,
   Activity,
-  MapPin,
   Clock,
   ShieldCheck,
   AlertCircle,
@@ -865,37 +864,25 @@ export function FacilityDetail() {
               </div>
             </div>
 
-            {/* Core Attributes */}
-            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-navy-soft)]">
-                  <MapPin size={15} className="text-[var(--color-maroon)]" />
-                  Physical Location
-                </div>
-                <p className="mt-2 text-sm font-medium text-[var(--color-navy)]">
-                  {facility.location ?? "Location not specified"}
-                </p>
+            {/* Operational State Attribute */}
+            <div className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-navy-soft)]">
+                <ShieldCheck size={15} className="text-[var(--color-maroon)]" />
+                Operational State
               </div>
-
-              <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-navy-soft)]">
-                  <ShieldCheck size={15} className="text-[var(--color-maroon)]" />
-                  Operational State
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <span
-                    className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                      statusDisplay[facility.status]?.badgeClass ??
-                      "border-gray-200 bg-gray-100 text-gray-700"
-                    }`}
-                  >
-                    {statusDisplay[facility.status]?.label ?? facility.status}
-                  </span>
-                </div>
-                <p className="mt-1 text-[11px] text-[var(--color-navy-soft)]">
-                  {statusDisplay[facility.status]?.note}
-                </p>
+              <div className="mt-2 flex items-center gap-2">
+                <span
+                  className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                    statusDisplay[facility.status]?.badgeClass ??
+                    "border-gray-200 bg-gray-100 text-gray-700"
+                  }`}
+                >
+                  {statusDisplay[facility.status]?.label ?? facility.status}
+                </span>
               </div>
+              <p className="mt-1 text-[11px] text-[var(--color-navy-soft)]">
+                {statusDisplay[facility.status]?.note}
+              </p>
             </div>
 
             {/* Access Model Action Banners: Padel Online Reservation & Gym Membership */}

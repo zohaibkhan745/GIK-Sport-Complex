@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Activity, MapPin, Dumbbell } from "lucide-react";
+import { ArrowRight, Activity, Dumbbell } from "lucide-react";
 import type { Facility } from "../types";
 
 export type FacilityAccessModel = "padel" | "gym" | "timetable";
@@ -89,20 +89,6 @@ export function FacilityCard({ facility }: { facility: Facility }) {
         >
           {facility.name}
         </Link>
-
-        {/* Location & Timetable meta */}
-        {facility.location ? (
-          <p className="mt-1 flex items-center gap-1 text-xs text-[var(--color-navy-soft)]">
-            <MapPin size={11} className="flex-shrink-0" />
-            <span className="truncate">{facility.location}</span>
-          </p>
-        ) : (
-          <p className="mt-1 text-xs text-[var(--color-navy-soft)]">
-            {facility.schedules.length === 1
-              ? "1 weekly window"
-              : `${facility.schedules.length} weekly windows`}
-          </p>
-        )}
 
         {accessModel === "gym" && (
           <p className="mt-1 text-[11px] font-medium text-[var(--color-navy-soft)]">

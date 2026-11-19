@@ -121,7 +121,7 @@ describe("Facility Detail Page Component", () => {
     expect(
       screen.getByText("Synthetic test description for demonstration court")
     ).toBeInTheDocument();
-    expect(screen.getByText("Wing B, Level 1")).toBeInTheDocument();
+    expect(screen.queryByText("Wing B, Level 1")).not.toBeInTheDocument();
     expect(screen.getByText("Active & Operational")).toBeInTheDocument();
 
     // Verify Schedule items & weekday translation
@@ -157,7 +157,7 @@ describe("Facility Detail Page Component", () => {
     expect(
       screen.getByText("No description provided for this facility.")
     ).toBeInTheDocument();
-    expect(screen.getByText("Location not specified")).toBeInTheDocument();
+    expect(screen.queryByText("Location not specified")).not.toBeInTheDocument();
     expect(screen.getByText("Under Maintenance")).toBeInTheDocument();
     expect(
       screen.getByText(
