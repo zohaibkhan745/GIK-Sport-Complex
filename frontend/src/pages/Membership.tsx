@@ -222,7 +222,7 @@ export function Membership() {
                 Sign in to View or Purchase Membership
               </h2>
               <p className="mx-auto mt-2 max-w-md text-sm text-[var(--color-navy-soft)]">
-                Active GIKI students, faculty, and staff can purchase or renew 30-day gym passes directly using their digital wallet.
+                Active GIKI students, faculty, and staff can purchase or renew 30-day New Gym passes directly using their digital wallet. (Old Gym remains free for all students).
               </p>
               <div className="mt-6 flex justify-center gap-4">
                 <Link
@@ -402,7 +402,10 @@ export function Membership() {
               {/* Right Col: Plan Summary & Rules */}
               <div className="space-y-6">
                 <div className="rounded-2xl border border-[var(--color-border)] bg-white p-6 shadow-sm">
-                  <h3 className="text-base font-bold text-[var(--color-navy)]">Standard 30-Day Plan</h3>
+                  <h3 className="text-base font-bold text-[var(--color-navy)]">New Gym 30-Day Plan</h3>
+                  <div className="mt-2 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+                    <strong>Note:</strong> Old Gym access remains 100% free for all students. This pass grants access to the New Gym suite.
+                  </div>
                   <div className="mt-3 flex items-baseline gap-1">
                     <span className="text-3xl font-extrabold text-[var(--color-navy)]">PKR 3,000</span>
                     <span className="text-xs text-[var(--color-navy-soft)]">/ 30 days</span>
@@ -415,7 +418,7 @@ export function Membership() {
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                      Free weights, squat racks & cardio suite
+                      New Gym floor (Olympic racks, cardio suite & functional rigs)
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />

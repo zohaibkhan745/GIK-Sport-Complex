@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Plus,
   ArrowRight,
+  Dumbbell,
 } from "lucide-react";
 import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
@@ -934,29 +935,98 @@ export function FacilityDetail() {
             ) && (
               <div
                 data-testid="gym-membership-banner"
-                className="mt-6 rounded-xl border border-indigo-200 bg-indigo-50/80 p-4 text-indigo-950 shadow-2xs"
+                className="mt-6 space-y-3"
               >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="font-display text-sm font-bold text-indigo-950">
-                        Gym Membership Pass Required
-                      </h2>
-                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-indigo-900 border border-indigo-200">
-                        PKR 3,000 / 30 Days
-                      </span>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-display text-xs font-bold text-[var(--color-navy)] uppercase tracking-wider">
+                    Gymnasium Sections & Access Model
+                  </h3>
+                  <span className="text-[11px] text-[var(--color-navy-soft)]">
+                    Two facilities under one complex
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Sub-venue 1: New Gym (Paid Membership Pass) */}
+                  <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50/80 p-4.5 flex flex-col justify-between shadow-2xs">
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-navy)] text-white flex-shrink-0">
+                            <Dumbbell size={16} />
+                          </span>
+                          <div>
+                            <h4 className="font-display text-sm font-bold text-[var(--color-navy)]">
+                              New Gym
+                            </h4>
+                            <p className="text-[11px] font-medium text-indigo-900">
+                              Fitness & Strength Suite
+                            </p>
+                          </div>
+                        </div>
+                        <span className="inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-900 border border-indigo-300 flex-shrink-0">
+                          PKR 3,000 / 30 Days
+                        </span>
+                      </div>
+
+                      <p className="mt-2.5 text-xs text-indigo-950 leading-relaxed">
+                        Olympic racks, specialized free weights, cardio machines, and functional rigs. Requires an active 30-day membership pass.
+                      </p>
                     </div>
-                    <p className="mt-0.5 text-xs text-indigo-800">
-                      Full floor access with automatic 30-day validity tracking and instant renewal.
-                    </p>
+
+                    <div className="mt-3.5 pt-3 border-t border-indigo-200/80 flex items-center justify-between">
+                      <span className="text-[11px] font-medium text-indigo-800">
+                        Pass verified at entry
+                      </span>
+                      <Link
+                        to="/membership"
+                        className="inline-flex items-center justify-center gap-1 rounded-lg bg-[var(--color-maroon)] px-3 py-1.5 text-xs font-semibold text-white shadow-2xs transition-all hover:bg-[var(--color-maroon-dark)] active:scale-98"
+                      >
+                        <span>Get Pass</span>
+                        <ArrowRight size={12} />
+                      </Link>
+                    </div>
                   </div>
-                  <Link
-                    to="/membership"
-                    className="inline-flex flex-shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-navy)] px-4 py-2 text-xs font-semibold text-white shadow-2xs transition-all hover:bg-[#002244] active:scale-98"
-                  >
-                    <span>Get / Renew Pass</span>
-                    <ArrowRight size={13} />
-                  </Link>
+
+                  {/* Sub-venue 2: Old Gym (100% Free Access) */}
+                  <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/80 p-4.5 flex flex-col justify-between shadow-2xs">
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-800 text-white flex-shrink-0">
+                            <Dumbbell size={16} />
+                          </span>
+                          <div>
+                            <h4 className="font-display text-sm font-bold text-emerald-950">
+                              Old Gym
+                            </h4>
+                            <p className="text-[11px] font-medium text-emerald-800">
+                              Campus Conditioning Room
+                            </p>
+                          </div>
+                        </div>
+                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-900 border border-emerald-300 flex-shrink-0">
+                          100% Free Access
+                        </span>
+                      </div>
+
+                      <p className="mt-2.5 text-xs text-emerald-950 leading-relaxed">
+                        Traditional barbell benches, standard free weights, pull-up rigs, and open workout floor. Open to all registered students without fee.
+                      </p>
+                    </div>
+
+                    <div className="mt-3.5 pt-3 border-t border-emerald-200/80 flex items-center justify-between">
+                      <span className="text-[11px] font-medium text-emerald-800">
+                        No pass or payment needed
+                      </span>
+                      <a
+                        href="#schedule"
+                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-900 transition-all hover:bg-emerald-100/50"
+                      >
+                        <span>View Hours</span>
+                      </a>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

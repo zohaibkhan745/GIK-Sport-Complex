@@ -74,7 +74,7 @@ func CampusFacilityFixtures() []FacilityFixture {
 			ID:          uuid.MustParse("c0000002-0000-4000-8000-000000000002"),
 			Slug:        "central-fitness-gym",
 			Name:        "GIKI Central Fitness & Strength Gym",
-			Description: strPtr("Full strength-and-conditioning floor with Olympic squat racks, free weights, cardio machines, and functional rigs. Requires 30-day membership pass."),
+			Description: strPtr("Comprehensive campus fitness facility housing both the New Gym (premium Olympic lifting and cardio suite; 30-day membership pass required) and Old Gym (open student conditioning room; free walk-in access for all students)."),
 			Location:    strPtr("Sports Complex, Ground Floor East"),
 			Status:      "active",
 			Schedules: []ScheduleFixture{

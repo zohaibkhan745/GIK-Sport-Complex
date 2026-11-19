@@ -103,6 +103,12 @@ export function FacilityCard({ facility }: { facility: Facility }) {
               : `${facility.schedules.length} weekly windows`}
           </p>
         )}
+
+        {accessModel === "gym" && (
+          <p className="mt-1 text-[11px] font-medium text-[var(--color-navy-soft)]">
+            New Gym (Pass) &bull; Old Gym (Free)
+          </p>
+        )}
       </div>
 
       {/* Action Area: Context-specific based on access model */}
