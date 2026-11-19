@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
-import { FacilityDetail } from "../pages/FacilityDetail";
+import { FacilityDetail, getGoogleMapsStatus, formatClockTime } from "../pages/FacilityDetail";
 import { api, ApiError } from "../api";
 import { AuthContext, type AuthContextType } from "../context/AuthContext";
 import { formatTimeRange, type AuthUser, type Facility } from "../types";
@@ -122,7 +122,11 @@ describe("Facility Detail Page Component", () => {
       screen.getByText("Synthetic test description for demonstration court")
     ).toBeInTheDocument();
     expect(screen.queryByText("Wing B, Level 1")).not.toBeInTheDocument();
-    expect(screen.getByText("Active & Operational")).toBeInTheDocument();
+    expect(screen.getByTestId("live-operating-status")).toBeInTheDocument();
+    expect(screen.getByTestId("live-operating-detail")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Operational status reflects physical readiness/i)
+    ).not.toBeInTheDocument();
 
     // Verify Schedule items & weekday translation
     expect(screen.getByText("Monday")).toBeInTheDocument();
@@ -158,7 +162,8 @@ describe("Facility Detail Page Component", () => {
       screen.getByText("No description provided for this facility.")
     ).toBeInTheDocument();
     expect(screen.queryByText("Location not specified")).not.toBeInTheDocument();
-    expect(screen.getByText("Under Maintenance")).toBeInTheDocument();
+    expect(screen.getByTestId("live-operating-status")).toHaveTextContent("Temporarily Closed");
+    expect(screen.getByText(/Under scheduled maintenance/)).toBeInTheDocument();
     expect(
       screen.getByText(
         "No recurring operating schedules are currently registered for this facility."
@@ -2215,6 +2220,354 @@ describe("Facility Detail Page Component", () => {
       expect(vi.mocked(api.createSchedule)).toHaveBeenCalledTimes(2);
       expect(screen.getByTestId("schedule-row-sched-tue")).toBeInTheDocument();
       expect(screen.getByTestId("schedule-row-sched-thu")).toBeInTheDocument();
+    });
+  });
+
+  describe("Multi-Audience Allocation & Concurrent Shared Operating Windows", () => {
+    it("allows allocating a new window to multiple audience groups (e.g. Students + Staff) concurrently", async () => {
+      vi.mocked(api.getFacility).mockResolvedValue(completeFacility);
+      vi.mocked(api.createSchedule)
+        .mockResolvedValueOnce({
+          id: "sched-multi-student",
+          dayOfWeek: 5,
+          startTime: "08:00:00",
+          endTime: "10:00:00",
+          audience: "student",
+        })
+        .mockResolvedValueOnce({
+          id: "sched-multi-staff",
+          dayOfWeek: 5,
+          startTime: "08:00:00",
+          endTime: "10:00:00",
+          audience: "staff",
+        });
+
+      render(
+        <AuthContext.Provider
+          value={{
+            user: {
+              id: "usr-director",
+              email: "director@example.test",
+              displayName: "Director User",
+              roles: ["sports_director"],
+            },
+            isLoading: false,
+            checkError: null,
+            logoutError: null,
+            login: vi.fn(),
+            logout: vi.fn(),
+            retryCheckSession: vi.fn(),
+            clearLogoutError: vi.fn(),
+          }}
+        >
+          <MemoryRouter initialEntries={["/facilities/demo-badminton-court?day=all"]}>
+            <Routes>
+              <Route path="/facilities/:slug" element={<FacilityDetail />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("add-schedule-window-btn")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("add-schedule-window-btn"));
+
+      fireEvent.change(screen.getByLabelText("Day of week"), {
+        target: { value: "5" },
+      });
+      fireEvent.change(screen.getByLabelText("Start time"), {
+        target: { value: "08:00:00" },
+      });
+      fireEvent.change(screen.getByLabelText("End time"), {
+        target: { value: "10:00:00" },
+      });
+
+      // Enable multi-audience
+      fireEvent.click(screen.getByTestId("toggle-multi-audience-checkbox"));
+
+      // Click "Students + Staff/Kids" preset
+      fireEvent.click(screen.getByText("Students + Staff/Kids"));
+
+      // Submit
+      fireEvent.click(screen.getByTestId("submit-add-schedule-btn"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("schedule-success-banner")).toBeInTheDocument();
+      });
+
+      expect(vi.mocked(api.createSchedule)).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(api.createSchedule)).toHaveBeenNthCalledWith(
+        1,
+        "demo-badminton-court",
+        {
+          dayOfWeek: 5,
+          startTime: "08:00:00",
+          endTime: "10:00:00",
+          audience: "student",
+        }
+      );
+      expect(vi.mocked(api.createSchedule)).toHaveBeenNthCalledWith(
+        2,
+        "demo-badminton-court",
+        {
+          dayOfWeek: 5,
+          startTime: "08:00:00",
+          endTime: "10:00:00",
+          audience: "staff",
+        }
+      );
+
+      // Verify both rows appear in the timetable and display Shared Slot badge
+      expect(screen.getByTestId("schedule-row-sched-multi-student")).toBeInTheDocument();
+      expect(screen.getByTestId("schedule-row-sched-multi-staff")).toBeInTheDocument();
+      expect(screen.getByTestId("shared-slot-badge-sched-multi-student")).toBeInTheDocument();
+      expect(screen.getByTestId("shared-slot-badge-sched-multi-staff")).toBeInTheDocument();
+    });
+
+    it("allows an admin editing an existing window to also allocate it to additional audiences", async () => {
+      vi.mocked(api.getFacility).mockResolvedValue(completeFacility);
+      vi.mocked(api.updateSchedule).mockResolvedValue({
+        id: "sched-1",
+        dayOfWeek: 1,
+        startTime: "09:00:00",
+        endTime: "12:00:00",
+        audience: "student",
+      });
+      vi.mocked(api.createSchedule).mockResolvedValueOnce({
+        id: "sched-extra-staff",
+        dayOfWeek: 1,
+        startTime: "09:00:00",
+        endTime: "12:00:00",
+        audience: "staff",
+      });
+
+      render(
+        <AuthContext.Provider
+          value={{
+            user: {
+              id: "usr-director",
+              email: "director@example.test",
+              displayName: "Director User",
+              roles: ["sports_director"],
+            },
+            isLoading: false,
+            checkError: null,
+            logoutError: null,
+            login: vi.fn(),
+            logout: vi.fn(),
+            retryCheckSession: vi.fn(),
+            clearLogoutError: vi.fn(),
+          }}
+        >
+          <MemoryRouter initialEntries={["/facilities/demo-badminton-court?day=all"]}>
+            <Routes>
+              <Route path="/facilities/:slug" element={<FacilityDetail />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByLabelText("Edit Monday schedule window")).toBeInTheDocument();
+      });
+
+      // Open edit form
+      fireEvent.click(screen.getByLabelText("Edit Monday schedule window"));
+
+      // Check additional audience checkbox for staff
+      const staffCheckbox = screen.getByTestId("edit-add-audience-staff");
+      fireEvent.click(staffCheckbox);
+
+      // Save changes
+      fireEvent.click(screen.getByRole("button", { name: /save schedule window/i }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("schedule-success-banner")).toBeInTheDocument();
+      });
+
+      expect(vi.mocked(api.updateSchedule)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(api.createSchedule)).toHaveBeenCalledWith(
+        "demo-badminton-court",
+        {
+          dayOfWeek: 1,
+          startTime: "09:00:00",
+          endTime: "12:00:00",
+          audience: "staff",
+        }
+      );
+
+      // Both the original student window and the new staff window are rendered with Shared Slot badges
+      expect(screen.getByTestId("schedule-row-sched-1")).toBeInTheDocument();
+      expect(screen.getByTestId("schedule-row-sched-extra-staff")).toBeInTheDocument();
+      expect(screen.getByTestId("shared-slot-badge-sched-1")).toBeInTheDocument();
+      expect(screen.getByTestId("shared-slot-badge-sched-extra-staff")).toBeInTheDocument();
+    });
+  });
+
+  describe("Google Maps Real-Time Operating Status Calculation", () => {
+    it("formats 24-hour time strings into 12-hour AM/PM format correctly", () => {
+      expect(formatClockTime("09:00:00")).toBe("9:00 AM");
+      expect(formatClockTime("12:00:00")).toBe("12:00 PM");
+      expect(formatClockTime("16:30:00")).toBe("4:30 PM");
+      expect(formatClockTime("22:00:00")).toBe("10:00 PM");
+      expect(formatClockTime("24:00:00")).toBe("Midnight");
+      expect(formatClockTime("00:00:00")).toBe("12:00 AM");
+    });
+
+    it("returns Temporarily Closed for maintenance status", () => {
+      const facility: Facility = {
+        id: "f-maint",
+        slug: "f-maint",
+        name: "Court Under Maintenance",
+        description: null,
+        location: null,
+        status: "maintenance",
+        schedules: [],
+      };
+      const result = getGoogleMapsStatus(facility);
+      expect(result.isOpen).toBe(false);
+      expect(result.badge).toBe("Temporarily Closed");
+      expect(result.detail).toBe("Under scheduled maintenance");
+      expect(result.badgeClass).toContain("amber");
+    });
+
+    it("returns Closed for closed status", () => {
+      const facility: Facility = {
+        id: "f-closed",
+        slug: "f-closed",
+        name: "Closed Facility",
+        description: null,
+        location: null,
+        status: "closed",
+        schedules: [],
+      };
+      const result = getGoogleMapsStatus(facility);
+      expect(result.isOpen).toBe(false);
+      expect(result.badge).toBe("Closed");
+      expect(result.detail).toBe("Closed until further notice");
+    });
+
+    it("returns Schedule Pending when an active facility has no schedules", () => {
+      const facility: Facility = {
+        id: "f-empty",
+        slug: "f-empty",
+        name: "Empty Facility",
+        description: null,
+        location: null,
+        status: "active",
+        schedules: [],
+      };
+      const result = getGoogleMapsStatus(facility);
+      expect(result.isOpen).toBe(false);
+      expect(result.badge).toBe("Schedule Pending");
+      expect(result.detail).toBe("Operating hours not registered");
+    });
+
+    it("returns Open now when current PKT time falls within an active window", () => {
+      const facility: Facility = {
+        id: "f-active",
+        slug: "f-active",
+        name: "Active Court",
+        description: null,
+        location: null,
+        status: "active",
+        schedules: [
+          {
+            id: "s-1",
+            dayOfWeek: 1, // Monday
+            startTime: "09:00:00",
+            endTime: "13:00:00",
+            audience: "student",
+          },
+        ],
+      };
+      // Monday at 10:30 AM PKT = UTC 2026-05-18T05:30:00Z
+      const testDate = new Date("2026-05-18T05:30:00Z");
+      const result = getGoogleMapsStatus(facility, testDate);
+      expect(result.isOpen).toBe(true);
+      expect(result.badge).toBe("Open now");
+      expect(result.detail).toBe("Closes at 1:00 PM (Students)");
+      expect(result.dotClass).toContain("animate-pulse");
+    });
+
+    it("returns Closed with Opens at later today when today has an upcoming window", () => {
+      const facility: Facility = {
+        id: "f-active",
+        slug: "f-active",
+        name: "Active Court",
+        description: null,
+        location: null,
+        status: "active",
+        schedules: [
+          {
+            id: "s-1",
+            dayOfWeek: 1, // Monday
+            startTime: "16:00:00",
+            endTime: "20:00:00",
+            audience: "student",
+          },
+        ],
+      };
+      // Monday at 10:30 AM PKT = UTC 2026-05-18T05:30:00Z
+      const testDate = new Date("2026-05-18T05:30:00Z");
+      const result = getGoogleMapsStatus(facility, testDate);
+      expect(result.isOpen).toBe(false);
+      expect(result.badge).toBe("Closed");
+      expect(result.detail).toBe("Opens at 4:00 PM (Students)");
+    });
+
+    it("returns Closed with Opens tomorrow when next window is the following day", () => {
+      const facility: Facility = {
+        id: "f-active",
+        slug: "f-active",
+        name: "Active Court",
+        description: null,
+        location: null,
+        status: "active",
+        schedules: [
+          {
+            id: "s-1",
+            dayOfWeek: 2, // Tuesday
+            startTime: "08:00:00",
+            endTime: "11:00:00",
+            audience: "faculty",
+          },
+        ],
+      };
+      // Monday at 14:00 PKT = UTC 2026-05-18T09:00:00Z
+      const testDate = new Date("2026-05-18T09:00:00Z");
+      const result = getGoogleMapsStatus(facility, testDate);
+      expect(result.isOpen).toBe(false);
+      expect(result.badge).toBe("Closed");
+      expect(result.detail).toBe("Opens tomorrow at 8:00 AM (Faculty)");
+    });
+
+    it("returns Closed with weekday name when next window is multiple days ahead", () => {
+      const facility: Facility = {
+        id: "f-active",
+        slug: "f-active",
+        name: "Active Court",
+        description: null,
+        location: null,
+        status: "active",
+        schedules: [
+          {
+            id: "s-1",
+            dayOfWeek: 5, // Friday
+            startTime: "18:00:00",
+            endTime: "21:00:00",
+            audience: "all",
+          },
+        ],
+      };
+      // Monday at 14:00 PKT = UTC 2026-05-18T09:00:00Z
+      const testDate = new Date("2026-05-18T09:00:00Z");
+      const result = getGoogleMapsStatus(facility, testDate);
+      expect(result.isOpen).toBe(false);
+      expect(result.badge).toBe("Closed");
+      expect(result.detail).toBe("Opens Friday at 6:00 PM (Open to All)");
     });
   });
 });

@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Activity,
   Clock,
-  ShieldCheck,
   AlertCircle,
   CheckCircle2,
   Edit2,
@@ -30,8 +29,9 @@ import {
 
 function normalizeTimeToSeconds(val: string): string {
   const trimmed = val.trim();
-  if (/^\d{2}:\d{2}$/.test(trimmed)) {
-    return `${trimmed}:00`;
+  if (/^\d{1,2}:\d{2}$/.test(trimmed)) {
+    const parts = trimmed.split(":");
+    return `${parts[0].padStart(2, "0")}:${parts[1]}:00`;
   }
   return trimmed;
 }
@@ -52,6 +52,38 @@ function parseTimeToSeconds(val: string, allow24: boolean): number | null {
     return null;
   }
   return h * 3600 + m * 60 + s;
+}
+
+export function formatClockTime(timeStr: string): string {
+  const norm = normalizeTimeToSeconds(timeStr);
+  if (norm === "24:00:00") return "Midnight";
+  const parts = norm.split(":").map(Number);
+  if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return timeStr;
+  let h = parts[0];
+  const m = parts[1];
+  const period = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+  const minuteStr = m === 0 ? "00" : m < 10 ? `0${m}` : `${m}`;
+  return `${h}:${minuteStr} ${period}`;
+}
+
+export function getPKTCurrentSeconds(now = new Date()): number {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Karachi",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+      hour12: false,
+    }).formatToParts(now);
+    const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+    const m = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+    const s = Number(parts.find((p) => p.type === "second")?.value ?? 0);
+    return (h % 24) * 3600 + m * 60 + s;
+  } catch {
+    return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  }
 }
 
 export function getPKTDayOfWeek(now = new Date()): number {
@@ -78,14 +110,7 @@ export function getPKTDayOfWeek(now = new Date()): number {
 
 export function isWindowActiveNow(startTime: string, endTime: string, now = new Date()): boolean {
   try {
-    const timeStr = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Karachi",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    }).format(now);
-    const currentSec = parseTimeToSeconds(timeStr, false);
+    const currentSec = getPKTCurrentSeconds(now);
     const startSec = parseTimeToSeconds(startTime, false);
     const endSec = parseTimeToSeconds(endTime, true);
     if (currentSec === null || startSec === null || endSec === null) return false;
@@ -93,6 +118,144 @@ export function isWindowActiveNow(startTime: string, endTime: string, now = new 
   } catch {
     return false;
   }
+}
+
+export interface GoogleMapsLiveStatus {
+  isOpen: boolean;
+  badge: "Open now" | "Closed" | "Temporarily Closed" | "Schedule Pending";
+  detail: string;
+  badgeClass: string;
+  dotClass: string;
+}
+
+function getAudienceLabel(audience: string): string {
+  if (AUDIENCE_LABELS[audience]) return AUDIENCE_LABELS[audience];
+  if (audience === "all") return "Open to All";
+  return audience;
+}
+
+export function getGoogleMapsStatus(
+  facility: Facility | null | undefined,
+  now = new Date()
+): GoogleMapsLiveStatus {
+  if (!facility) {
+    return {
+      isOpen: false,
+      badge: "Closed",
+      detail: "Facility information unavailable",
+      badgeClass: "border-slate-400/40 bg-slate-500/20 text-slate-300",
+      dotClass: "bg-slate-400",
+    };
+  }
+
+  if (facility.status === "maintenance") {
+    return {
+      isOpen: false,
+      badge: "Temporarily Closed",
+      detail: "Under scheduled maintenance",
+      badgeClass: "border-amber-400/40 bg-amber-500/20 text-amber-200",
+      dotClass: "bg-amber-400",
+    };
+  }
+
+  if (facility.status === "closed") {
+    return {
+      isOpen: false,
+      badge: "Closed",
+      detail: "Closed until further notice",
+      badgeClass: "border-slate-400/40 bg-slate-500/20 text-slate-300",
+      dotClass: "bg-slate-400",
+    };
+  }
+
+  const schedules = facility.schedules ?? [];
+  if (schedules.length === 0) {
+    return {
+      isOpen: false,
+      badge: "Schedule Pending",
+      detail: "Operating hours not registered",
+      badgeClass: "border-slate-400/40 bg-slate-500/20 text-slate-300",
+      dotClass: "bg-slate-400",
+    };
+  }
+
+  const currentDay = getPKTDayOfWeek(now);
+  const currentSec = getPKTCurrentSeconds(now);
+
+  // 1. Check if currently inside an active window today
+  const todaySchedules = schedules
+    .filter((s) => s.dayOfWeek === currentDay)
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+  const activeWindow = todaySchedules.find((s) => {
+    const startSec = parseTimeToSeconds(s.startTime, false);
+    const endSec = parseTimeToSeconds(s.endTime, true);
+    if (startSec === null || endSec === null) return false;
+    return currentSec >= startSec && currentSec < endSec;
+  });
+
+  if (activeWindow) {
+    const audienceLabel = getAudienceLabel(activeWindow.audience);
+    const audienceSuffix = audienceLabel ? ` (${audienceLabel})` : "";
+    return {
+      isOpen: true,
+      badge: "Open now",
+      detail: `Closes at ${formatClockTime(activeWindow.endTime)}${audienceSuffix}`,
+      badgeClass: "border-emerald-400/40 bg-emerald-500/20 text-emerald-200",
+      dotClass: "bg-emerald-400 animate-pulse",
+    };
+  }
+
+  // 2. Check if opening later today
+  const nextWindowToday = todaySchedules.find((s) => {
+    const startSec = parseTimeToSeconds(s.startTime, false);
+    return startSec !== null && startSec > currentSec;
+  });
+
+  if (nextWindowToday) {
+    const audienceLabel = getAudienceLabel(nextWindowToday.audience);
+    const audienceSuffix = audienceLabel ? ` (${audienceLabel})` : "";
+    return {
+      isOpen: false,
+      badge: "Closed",
+      detail: `Opens at ${formatClockTime(nextWindowToday.startTime)}${audienceSuffix}`,
+      badgeClass: "border-rose-400/40 bg-rose-500/20 text-rose-200",
+      dotClass: "bg-rose-400",
+    };
+  }
+
+  // 3. Look forward up to 7 days for the next scheduled opening
+  for (let offset = 1; offset <= 7; offset++) {
+    const targetDay = ((currentDay - 1 + offset) % 7) + 1;
+    const targetDaySchedules = schedules
+      .filter((s) => s.dayOfWeek === targetDay)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    if (targetDaySchedules.length > 0) {
+      const firstWindow = targetDaySchedules[0];
+      const audienceLabel = getAudienceLabel(firstWindow.audience);
+      const audienceSuffix = audienceLabel ? ` (${audienceLabel})` : "";
+      const dayLabel =
+        offset === 1
+          ? "tomorrow"
+          : `${WEEKDAY_NAMES[targetDay] ?? `Day ${targetDay}`}`;
+      return {
+        isOpen: false,
+        badge: "Closed",
+        detail: `Opens ${dayLabel} at ${formatClockTime(firstWindow.startTime)}${audienceSuffix}`,
+        badgeClass: "border-rose-400/40 bg-rose-500/20 text-rose-200",
+        dotClass: "bg-rose-400",
+      };
+    }
+  }
+
+  return {
+    isOpen: false,
+    badge: "Closed",
+    detail: "No upcoming sessions scheduled",
+    badgeClass: "border-rose-400/40 bg-rose-500/20 text-rose-200",
+    dotClass: "bg-rose-400",
+  };
 }
 
 export const WEEKDAYS = [
@@ -103,6 +266,14 @@ export const WEEKDAYS = [
   { day: 5, label: "Fri", full: "Friday" },
   { day: 6, label: "Sat", full: "Saturday" },
   { day: 7, label: "Sun", full: "Sunday" },
+] as const;
+
+export const AUDIENCE_OPTIONS = [
+  { value: "student", label: "Students", detail: "GIKI enrolled students" },
+  { value: "staff", label: "Staff & Families", detail: "Employees, staff & kids/dependents" },
+  { value: "faculty", label: "Faculty", detail: "Teaching & research faculty" },
+  { value: "women_only", label: "Women Only", detail: "Designated women-only sessions" },
+  { value: "general", label: "General Community", detail: "Open to all campus community members" },
 ] as const;
 
 function sortSchedules(schedules: Schedule[]): Schedule[] {
@@ -131,6 +302,7 @@ export function FacilityDetail() {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const todayDay = useMemo(() => getPKTDayOfWeek(), []);
+  const liveStatus = useMemo(() => getGoogleMapsStatus(facility), [facility]);
 
   const selectedDay = useMemo((): number | "all" => {
     const dayParam = searchParams.get("day");
@@ -207,6 +379,7 @@ export function FacilityDetail() {
   const [draftStartTime, setDraftStartTime] = useState<string>("09:00:00");
   const [draftEndTime, setDraftEndTime] = useState<string>("12:00:00");
   const [draftAudience, setDraftAudience] = useState<string>("student");
+  const [editAdditionalAudiences, setEditAdditionalAudiences] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -223,6 +396,8 @@ export function FacilityDetail() {
   const [addDayOfWeek, setAddDayOfWeek] = useState<number>(1);
   const [isMultiDay, setIsMultiDay] = useState<boolean>(false);
   const [multiDays, setMultiDays] = useState<number[]>([1]);
+  const [isMultiAudience, setIsMultiAudience] = useState<boolean>(false);
+  const [multiAudiences, setMultiAudiences] = useState<string[]>(["student"]);
   const [addStartTime, setAddStartTime] = useState<string>("09:00:00");
   const [addEndTime, setAddEndTime] = useState<string>("12:00:00");
   const [addAudience, setAddAudience] = useState<string>("student");
@@ -313,6 +488,7 @@ export function FacilityDetail() {
     setDraftStartTime(s.startTime);
     setDraftEndTime(s.endTime);
     setDraftAudience(s.audience);
+    setEditAdditionalAudiences([]);
     setEditError(null);
     setSuccessMessage(null);
   };
@@ -320,6 +496,7 @@ export function FacilityDetail() {
   const cancelEditing = () => {
     if (isSaving) return;
     setEditingScheduleId(null);
+    setEditAdditionalAudiences([]);
     setEditError(null);
   };
 
@@ -496,6 +673,7 @@ export function FacilityDetail() {
   const startAdding = () => {
     if (isSaving || isDeleting || isSavingAdd) return;
     setEditingScheduleId(null);
+    setEditAdditionalAudiences([]);
     setEditError(null);
     setDeletingScheduleId(null);
     setDeleteError(null);
@@ -504,6 +682,8 @@ export function FacilityDetail() {
     setAddDayOfWeek(initialDay);
     setIsMultiDay(false);
     setMultiDays([initialDay]);
+    setIsMultiAudience(false);
+    setMultiAudiences(["student"]);
     setAddStartTime("09:00:00");
     setAddEndTime("12:00:00");
     setAddAudience("student");
@@ -515,6 +695,8 @@ export function FacilityDetail() {
     if (isSavingAdd) return;
     setIsAdding(false);
     setIsMultiDay(false);
+    setIsMultiAudience(false);
+    setMultiAudiences(["student"]);
     setAddError(null);
     setTimeout(() => {
       addWindowButtonRef.current?.focus();
@@ -525,21 +707,29 @@ export function FacilityDetail() {
     if (isSavingAdd || !slug) return;
 
     const targetDays = isMultiDay ? multiDays : [addDayOfWeek];
+    const targetAudiences = isMultiAudience ? multiAudiences : [addAudience];
 
     if (targetDays.length === 0) {
       setAddError("Please select at least one day to apply this schedule.");
       return;
     }
 
-    const clientErr = validateScheduleWindow(
-      targetDays[0],
-      addStartTime,
-      addEndTime,
-      addAudience
-    );
-    if (clientErr) {
-      setAddError(clientErr);
+    if (targetAudiences.length === 0) {
+      setAddError("Please select at least one audience cohort to apply this schedule.");
       return;
+    }
+
+    for (const aud of targetAudiences) {
+      const clientErr = validateScheduleWindow(
+        targetDays[0],
+        addStartTime,
+        addEndTime,
+        aud
+      );
+      if (clientErr) {
+        setAddError(clientErr);
+        return;
+      }
     }
 
     const targetSlug = slug;
@@ -547,25 +737,27 @@ export function FacilityDetail() {
     setAddError(null);
 
     const createdSchedules: Schedule[] = [];
-    const duplicateDays: number[] = [];
+    const duplicateSlots: { day: number; audience: string }[] = [];
 
     try {
       for (const day of targetDays) {
-        const payload: CreateScheduleInput = {
-          dayOfWeek: day,
-          startTime: normalizeTimeToSeconds(addStartTime),
-          endTime: normalizeTimeToSeconds(addEndTime),
-          audience: addAudience,
-        };
+        for (const aud of targetAudiences) {
+          const payload: CreateScheduleInput = {
+            dayOfWeek: day,
+            startTime: normalizeTimeToSeconds(addStartTime),
+            endTime: normalizeTimeToSeconds(addEndTime),
+            audience: aud,
+          };
 
-        try {
-          const created = await api.createSchedule(targetSlug, payload);
-          createdSchedules.push(created);
-        } catch (err) {
-          if (err instanceof ApiError && err.status === 409) {
-            duplicateDays.push(day);
-          } else {
-            throw err;
+          try {
+            const created = await api.createSchedule(targetSlug, payload);
+            createdSchedules.push(created);
+          } catch (err) {
+            if (err instanceof ApiError && err.status === 409) {
+              duplicateSlots.push({ day, audience: aud });
+            } else {
+              throw err;
+            }
           }
         }
       }
@@ -586,13 +778,17 @@ export function FacilityDetail() {
         setIsAdding(false);
         setAddError(null);
         setIsMultiDay(false);
+        setIsMultiAudience(false);
+        setMultiAudiences(["student"]);
 
-        if (duplicateDays.length > 0) {
-          const dupNames = duplicateDays.map((d) => WEEKDAY_NAMES[d]).join(", ");
+        if (duplicateSlots.length > 0) {
+          const dupInfo = duplicateSlots
+            .map((d) => `${WEEKDAY_NAMES[d.day]} (${AUDIENCE_LABELS[d.audience] ?? d.audience})`)
+            .join(", ");
           setSuccessMessage(
-            `Added schedule for ${createdSchedules.length} ${
-              createdSchedules.length === 1 ? "day" : "days"
-            }. Skipped duplicate on: ${dupNames}.`
+            `Added ${createdSchedules.length} schedule ${
+              createdSchedules.length === 1 ? "window" : "windows"
+            }. Skipped duplicates on: ${dupInfo}.`
           );
         } else if (createdSchedules.length === 1) {
           if (selectedDay !== "all" && selectedDay !== createdSchedules[0].dayOfWeek) {
@@ -600,15 +796,19 @@ export function FacilityDetail() {
           }
           setSuccessMessage("Schedule window added successfully.");
         } else {
+          const uniqueDays = new Set(createdSchedules.map((s) => s.dayOfWeek)).size;
+          const uniqueAudiences = new Set(createdSchedules.map((s) => s.audience)).size;
           setSuccessMessage(
-            `Schedule windows added successfully for ${createdSchedules.length} days (repeats weekly).`
+            `Schedule windows added successfully (${createdSchedules.length} windows for ${uniqueAudiences} ${
+              uniqueAudiences === 1 ? "audience" : "audiences"
+            } across ${uniqueDays} ${uniqueDays === 1 ? "day" : "days"}).`
           );
         }
-      } else if (duplicateDays.length > 0) {
+      } else if (duplicateSlots.length > 0) {
         setAddError(
-          targetDays.length === 1
+          targetDays.length === 1 && targetAudiences.length === 1
             ? "This schedule window duplicates an existing operating window for this facility."
-            : "This schedule window duplicates an existing operating window for all selected days."
+            : "This schedule window duplicates an existing operating window for all selected days and audiences."
         );
       }
     } catch (err) {
@@ -689,6 +889,27 @@ export function FacilityDetail() {
         payload
       );
 
+      // Also create any additional allocated audiences
+      const createdAdditional: Schedule[] = [];
+      const duplicateAdditional: string[] = [];
+      for (const extraAud of editAdditionalAudiences) {
+        try {
+          const created = await api.createSchedule(targetSlug, {
+            dayOfWeek: draftDayOfWeek,
+            startTime: normalizeTimeToSeconds(draftStartTime),
+            endTime: normalizeTimeToSeconds(draftEndTime),
+            audience: extraAud,
+          });
+          createdAdditional.push(created);
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 409) {
+            duplicateAdditional.push(extraAud);
+          } else {
+            throw err;
+          }
+        }
+      }
+
       // Guard against late response after navigating away
       if (!isMountedRef.current || currentSlugRef.current !== targetSlug) {
         return;
@@ -697,17 +918,29 @@ export function FacilityDetail() {
       // Update timetable in local state directly from confirmed server response
       setFacility((prev) => {
         if (!prev || prev.slug !== targetSlug) return prev;
+        const updatedList = prev.schedules.map((item) =>
+          item.id === updatedSchedule.id ? updatedSchedule : item
+        );
         return {
           ...prev,
-          schedules: prev.schedules.map((item) =>
-            item.id === updatedSchedule.id ? updatedSchedule : item
-          ),
+          schedules: sortSchedules([...updatedList, ...createdAdditional]),
         };
       });
 
       setEditingScheduleId(null);
+      setEditAdditionalAudiences([]);
       setEditError(null);
-      setSuccessMessage("Schedule window updated successfully.");
+
+      if (createdAdditional.length > 0) {
+        const extraNames = createdAdditional
+          .map((s) => AUDIENCE_LABELS[s.audience] ?? s.audience)
+          .join(", ");
+        setSuccessMessage(
+          `Schedule window updated and also allocated to: ${extraNames}.`
+        );
+      } else {
+        setSuccessMessage("Schedule window updated successfully.");
+      }
     } catch (err) {
       if (!isMountedRef.current || currentSlugRef.current !== targetSlug) {
         return;
@@ -749,27 +982,6 @@ export function FacilityDetail() {
         setIsSaving(false);
       }
     }
-  };
-
-  const statusDisplay: Record<
-    string,
-    { label: string; badgeClass: string; note: string }
-  > = {
-    active: {
-      label: "Active & Operational",
-      badgeClass: "bg-emerald-50 text-emerald-800 border-emerald-300",
-      note: "Operational status reflects physical readiness, not real-time booking availability.",
-    },
-    maintenance: {
-      label: "Under Maintenance",
-      badgeClass: "bg-amber-50 text-amber-800 border-amber-300",
-      note: "This facility is currently undergoing scheduled maintenance.",
-    },
-    closed: {
-      label: "Closed",
-      badgeClass: "bg-gray-100 text-gray-700 border-gray-300",
-      note: "This facility is closed until further notice.",
-    },
   };
 
   return (
@@ -848,41 +1060,42 @@ export function FacilityDetail() {
               <span className="flex h-13 w-13 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--color-navy)] p-3">
                 <Activity size={24} className="text-[var(--color-gold-light)]" />
               </span>
-              <div>
-                <h1 className="font-display text-2xl font-semibold text-[#F3E6C4]">
-                  {facility.name}
-                </h1>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="font-display text-2xl font-semibold text-[#F3E6C4]">
+                    {facility.name}
+                  </h1>
+                  <span
+                    data-testid="live-operating-status"
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-0.5 text-xs font-medium ${liveStatus.badgeClass}`}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${liveStatus.dotClass}`} />
+                    <span>{liveStatus.badge}</span>
+                  </span>
+                </div>
+
+                <div
+                  data-testid="live-operating-detail"
+                  className="mt-2 flex items-center gap-2 text-xs font-medium text-[var(--color-gold-light)]"
+                >
+                  <Clock size={14} className="flex-shrink-0 text-[var(--color-gold)]" />
+                  <span>
+                    <strong className="text-white">{liveStatus.badge}</strong>
+                    <span className="mx-1.5 opacity-60">•</span>
+                    <span>{liveStatus.detail}</span>
+                  </span>
+                </div>
+
                 {facility.description ? (
-                  <p className="mt-1 text-sm text-[var(--color-gold-light)]">
+                  <p className="mt-2 text-sm text-[var(--color-gold-light)]">
                     {facility.description}
                   </p>
                 ) : (
-                  <p className="mt-1 text-sm italic text-[var(--color-gold-light)]/80">
+                  <p className="mt-2 text-sm italic text-[var(--color-gold-light)]/80">
                     No description provided for this facility.
                   </p>
                 )}
               </div>
-            </div>
-
-            {/* Operational State Attribute */}
-            <div className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-navy-soft)]">
-                <ShieldCheck size={15} className="text-[var(--color-maroon)]" />
-                Operational State
-              </div>
-              <div className="mt-2 flex items-center gap-2">
-                <span
-                  className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                    statusDisplay[facility.status]?.badgeClass ??
-                    "border-gray-200 bg-gray-100 text-gray-700"
-                  }`}
-                >
-                  {statusDisplay[facility.status]?.label ?? facility.status}
-                </span>
-              </div>
-              <p className="mt-1 text-[11px] text-[var(--color-navy-soft)]">
-                {statusDisplay[facility.status]?.note}
-              </p>
             </div>
 
             {/* Access Model Action Banners: Padel Online Reservation & Gym Membership */}
@@ -1310,18 +1523,44 @@ export function FacilityDetail() {
 
                       {/* Audience */}
                       <div>
-                        <label
-                          htmlFor="add-audience"
-                          className="block text-xs font-medium text-[var(--color-navy)] mb-1"
-                        >
-                          Audience
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label
+                            htmlFor="add-audience"
+                            className="block text-xs font-medium text-[var(--color-navy)]"
+                          >
+                            Audience
+                          </label>
+                          <button
+                            type="button"
+                            disabled={isSavingAdd}
+                            onClick={() => {
+                              setIsMultiAudience((prev) => !prev);
+                              if (!isMultiAudience && multiAudiences.length === 0) {
+                                setMultiAudiences([addAudience]);
+                              }
+                            }}
+                            className="text-[10px] font-semibold text-[var(--color-maroon)] hover:underline focus:outline-none disabled:opacity-50"
+                          >
+                            {isMultiAudience ? "Single audience" : "+ Multiple audiences"}
+                          </button>
+                        </div>
                         <select
                           id="add-audience"
                           aria-label="Audience"
                           disabled={isSavingAdd}
                           value={addAudience}
-                          onChange={(e) => setAddAudience(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "__multiple__") {
+                              setIsMultiAudience(true);
+                              if (!multiAudiences.includes(addAudience)) {
+                                setMultiAudiences([addAudience]);
+                              }
+                            } else {
+                              setAddAudience(val);
+                              setMultiAudiences([val]);
+                            }
+                          }}
                           className="w-full rounded-md border border-[var(--color-border)] bg-white px-2.5 py-1.5 text-xs text-[var(--color-navy)] focus:border-[var(--color-maroon)] focus:outline-none disabled:opacity-50"
                         >
                           <option value="general">
@@ -1332,9 +1571,103 @@ export function FacilityDetail() {
                           <option value="women_only">
                             Women Only
                           </option>
-                          <option value="staff">Staff</option>
+                          <option value="staff">Staff & Families (Employees / Kids)</option>
+                          <option value="__multiple__">+ Select multiple audiences...</option>
                         </select>
                       </div>
+                    </div>
+
+                    {/* Multi-Audience / Recurring Allocation Section */}
+                    <div className="pt-2 border-t border-[var(--color-border)]/60">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[var(--color-navy)]">
+                          <input
+                            type="checkbox"
+                            data-testid="toggle-multi-audience-checkbox"
+                            aria-label="Allocate to multiple audiences"
+                            checked={isMultiAudience}
+                            disabled={isSavingAdd}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setIsMultiAudience(checked);
+                              if (checked && multiAudiences.length === 0) {
+                                setMultiAudiences([addAudience]);
+                              }
+                            }}
+                            className="h-3.5 w-3.5 rounded border-[var(--color-border)] text-[var(--color-maroon)] focus:ring-[var(--color-gold)] cursor-pointer"
+                          />
+                          <span>Allocate to multiple audiences (e.g. Students + Employee's Kids / Staff)</span>
+                        </label>
+
+                        {isMultiAudience && (
+                          <div className="flex flex-wrap items-center gap-1 text-[11px]">
+                            <button
+                              type="button"
+                              disabled={isSavingAdd}
+                              onClick={() => setMultiAudiences(["student", "staff"])}
+                              className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-navy-soft)] hover:text-[var(--color-navy)] hover:bg-[var(--color-surface)] cursor-pointer"
+                            >
+                              Students + Staff/Kids
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSavingAdd}
+                              onClick={() => setMultiAudiences(["student", "faculty", "staff"])}
+                              className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-navy-soft)] hover:text-[var(--color-navy)] hover:bg-[var(--color-surface)] cursor-pointer"
+                            >
+                              All Campus
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSavingAdd}
+                              onClick={() => setMultiAudiences(["student", "faculty", "staff", "women_only", "general"])}
+                              className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-navy-soft)] hover:text-[var(--color-navy)] hover:bg-[var(--color-surface)] cursor-pointer"
+                            >
+                              Select All
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {isMultiAudience && (
+                        <div
+                          data-testid="multi-audience-pills-container"
+                          className="mt-2.5 flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-[var(--color-border)]/40"
+                        >
+                          <span className="text-[11px] font-medium text-[var(--color-navy-soft)] mr-1">
+                            Target Audiences:
+                          </span>
+                          {AUDIENCE_OPTIONS.map(({ value, label, detail }) => {
+                            const isChecked = multiAudiences.includes(value);
+                            return (
+                              <button
+                                key={value}
+                                type="button"
+                                disabled={isSavingAdd}
+                                title={detail}
+                                onClick={() => {
+                                  setMultiAudiences((prev) =>
+                                    prev.includes(value)
+                                      ? prev.filter((a) => a !== value)
+                                      : [...prev, value]
+                                  );
+                                }}
+                                data-testid={`multi-audience-btn-${value}`}
+                                aria-label={`Toggle ${label}`}
+                                aria-pressed={isChecked}
+                                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                                  isChecked
+                                    ? "bg-[var(--color-maroon)] text-white shadow-2xs"
+                                    : "border border-[var(--color-border)] bg-white text-[var(--color-navy)] hover:bg-[var(--color-surface)]"
+                                }`}
+                              >
+                                {isChecked && <span className="text-[10px]">✓</span>}
+                                <span>{label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     {/* Multi-Day / Recurring Weekly Application */}
@@ -1662,9 +1995,13 @@ export function FacilityDetail() {
                                   aria-label="Audience"
                                   disabled={isSaving}
                                   value={draftAudience}
-                                  onChange={(e) =>
-                                    setDraftAudience(e.target.value)
-                                  }
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setDraftAudience(val);
+                                    setEditAdditionalAudiences((prev) =>
+                                      prev.filter((a) => a !== val)
+                                    );
+                                  }}
                                   className="w-full rounded-md border border-[var(--color-border)] bg-white px-2.5 py-1.5 text-xs text-[var(--color-navy)] focus:border-[var(--color-maroon)] focus:outline-none"
                                 >
                                   <option value="general">
@@ -1675,8 +2012,55 @@ export function FacilityDetail() {
                                   <option value="women_only">
                                     Women Only
                                   </option>
-                                  <option value="staff">Staff</option>
+                                  <option value="staff">Staff & Families (Employees / Kids)</option>
                                 </select>
+                              </div>
+                            </div>
+
+                            {/* Additional Audience Allocation in Edit Form */}
+                            <div className="pt-2 border-t border-[var(--color-border)]/60">
+                              <div className="flex flex-col gap-1.5">
+                                <span className="text-xs font-semibold text-[var(--color-navy)]">
+                                  Also allocate this time window to additional audiences:
+                                </span>
+                                <div className="flex flex-wrap items-center gap-2 pt-1">
+                                  {AUDIENCE_OPTIONS.filter((a) => a.value !== draftAudience).map(
+                                    ({ value, label, detail }) => {
+                                      const isChecked = editAdditionalAudiences.includes(value);
+                                      return (
+                                        <label
+                                          key={value}
+                                          title={detail}
+                                          className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium cursor-pointer border transition-colors ${
+                                            isChecked
+                                              ? "bg-[var(--color-maroon)]/10 border-[var(--color-maroon)] text-[var(--color-maroon)] font-semibold"
+                                              : "bg-white border-[var(--color-border)] text-[var(--color-navy)] hover:bg-[var(--color-surface)]"
+                                          }`}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            disabled={isSaving}
+                                            data-testid={`edit-add-audience-${value}`}
+                                            checked={isChecked}
+                                            onChange={(e) => {
+                                              const checked = e.target.checked;
+                                              setEditAdditionalAudiences((prev) =>
+                                                checked
+                                                  ? [...prev, value]
+                                                  : prev.filter((a) => a !== value)
+                                              );
+                                            }}
+                                            className="h-3 w-3 rounded text-[var(--color-maroon)] cursor-pointer"
+                                          />
+                                          <span>{label}</span>
+                                        </label>
+                                      );
+                                    }
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-[var(--color-navy-soft)]">
+                                  Checking additional groups creates concurrent operating windows for this exact time slot (e.g. both students and employee kids).
+                                </p>
                               </div>
                             </div>
 
@@ -1842,6 +2226,14 @@ export function FacilityDetail() {
                       );
                     }
 
+                    const isConcurrent = facility.schedules.some(
+                      (other) =>
+                        other.id !== s.id &&
+                        other.dayOfWeek === s.dayOfWeek &&
+                        other.startTime === s.startTime &&
+                        other.endTime === s.endTime
+                    );
+
                     return (
                       <div
                         key={s.id}
@@ -1864,6 +2256,15 @@ export function FacilityDetail() {
                             >
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                               Open Now
+                            </span>
+                          )}
+                          {isConcurrent && (
+                            <span
+                              data-testid={`shared-slot-badge-${s.id}`}
+                              title="This time slot is shared concurrently with other audience cohorts"
+                              className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 text-[10px] font-semibold text-indigo-700"
+                            >
+                              Shared Slot
                             </span>
                           )}
                           <span className="rounded-full bg-[var(--color-border)]/60 px-3 py-0.5 text-xs font-medium text-[var(--color-navy)]">
