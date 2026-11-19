@@ -81,8 +81,8 @@ func DefaultDemoFixtures() []FacilityFixture {
 		{
 			ID:          uuid.MustParse("d0000002-0000-4000-8000-000000000002"),
 			Slug:        "demo-table-tennis",
-			Name:        "[Demo] Table Tennis Arena",
-			Description: strPtr("Synthetic demonstration table tennis arena for local testing"),
+			Name:        "[Demo] Table Tennis Hall",
+			Description: strPtr("Synthetic demonstration table tennis hall for local testing"),
 			Location:    strPtr("Demo Activity Center 1st Floor"),
 			Status:      "active",
 			Schedules: []ScheduleFixture{

@@ -8,7 +8,7 @@ Official sports facility booking, timings directory, and Director of Sports achi
 
 The **GIKI Sports Complex Portal** is designed to provide students, faculty, and administrative staff with a seamless digital platform for:
 1. **Sports & Court Timings**: View all 9 sports facilities with distinct student hours and faculty-dedicated priority slots.
-2. **Court Slot Reservation**: Instant, real-time booking for high-demand courts (Glass Padel Arena, Teakwood Badminton Hall, Glass-back Squash, Hard Tennis, Futsal Arena, and more).
+2. **Court Slot Reservation**: Instant, real-time booking for high-demand courts (Glass Padel Courts, Teakwood Badminton Hall, Glass-back Squash, Hard Tennis, Futsal Court, and more).
 3. **Director of Sports Showcase**: A dedicated portal for the Director of Sports to publish tournament victories, HEC Intervarsity championship trophies, medals, and official campus sports notices.
 4. **Passes & Memberships**: Manage semester racquet club passes, gym/pool memberships, and priority court passes.
 
@@ -189,12 +189,12 @@ Content-Type: application/json
 
 ## 🏛️ GIKI Sports Facilities Included
 
-1. **GIKI Glass Padel Arena (Court 1 & 2)**: Panoramic tempered glass, synthetic turf, 800 Lux LED tournament floodlights.
+1. **GIKI Glass Padel Courts (Court 1 & 2)**: Panoramic tempered glass, synthetic turf, 800 Lux LED tournament floodlights.
 2. **Indoor Badminton Championship Hall**: 4 BWF-certified teakwood sprung courts with climate cooling.
 3. **Glass-Back Squash Complex (Courts 1-3)**: Junckers beech flooring and electronic score monitors.
 4. **Hard Tennis Courts (Courts 1 & 2)**: US Open-grade acrylic cushioned hard courts.
-5. **GIKI Floodlit Futsal Arena**: FIFA Quality artificial turf with rebound netting.
-6. **Table Tennis Arena**: 6 ITTF-approved Butterfly tournament tables.
+5. **GIKI Floodlit Futsal Court**: FIFA Quality artificial turf with rebound netting.
+6. **Table Tennis Hall**: 6 ITTF-approved Butterfly tournament tables.
 7. **GIKI Central Fitness & Strength Gym**: Olympic racks, cardio zone, functional rigs.
 8. **Semi-Olympic Swimming Pool**: 25-meter 6-lane temperature-controlled pool with ozone filtration.
 

@@ -622,7 +622,7 @@ export function PadelBooking() {
                   <div><strong>Check-In Code:</strong> <span className="font-mono">{verifiedTicket.checkInCode}</span></div>
                   <div><strong>Player Name:</strong> {verifiedTicket.userName || "Verified Student"}</div>
                   <div><strong>Player Email:</strong> {verifiedTicket.userEmail || "N/A"}</div>
-                  <div><strong>Court:</strong> {verifiedTicket.facilityName || "Padel Arena"}</div>
+                  <div><strong>Court:</strong> {verifiedTicket.facilityName || "Padel Courts"}</div>
                   <div><strong>Status:</strong> <span className="font-bold uppercase text-green-700">{verifiedTicket.status}</span></div>
                 </div>
               </div>
@@ -771,7 +771,7 @@ export function PadelBooking() {
                         </span>
                       </div>
                       <p className="mt-1 text-xs text-amber-800">
-                        {selectedFacility?.name || "Padel Arena"} &bull; {formatSlotDate(selectedDate)} &bull;{" "}
+                        {selectedFacility?.name || "Padel Courts"} &bull; {formatSlotDate(selectedDate)} &bull;{" "}
                         {formatSlotTime(heldSlot.startTime)} &ndash; {formatSlotTime(heldSlot.endTime)} &bull;{" "}
                         <strong className="font-semibold">{formatPaisaToPKR(heldSlot.pricePaisa)}</strong>
                       </p>
@@ -880,7 +880,7 @@ export function PadelBooking() {
                     Available Time Slots
                   </h2>
                   <p className="text-xs text-[var(--color-navy-soft)]">
-                    {selectedFacility?.name || "Padel Arena"} &bull; {formatSlotDate(selectedDate)}
+                    {selectedFacility?.name || "Padel Courts"} &bull; {formatSlotDate(selectedDate)}
                   </p>
                 </div>
 
@@ -1066,7 +1066,7 @@ export function PadelBooking() {
                 <div className="flex justify-between py-1 border-b border-gray-100">
                   <span className="text-[var(--color-navy-soft)]">Facility / Court:</span>
                   <span className="font-semibold text-[var(--color-navy)]">
-                    {selectedFacility?.name || "Padel Arena"}
+                    {selectedFacility?.name || "Padel Courts"}
                   </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-gray-100">
@@ -1212,7 +1212,7 @@ export function PadelBooking() {
                 <div className="flex justify-between">
                   <span className="text-[var(--color-navy-soft)]">Court Facility:</span>
                   <span className="font-semibold text-[var(--color-navy)]">
-                    {confirmedTicket.facilityName || selectedFacility?.name || "Padel Arena"}
+                    {confirmedTicket.facilityName || selectedFacility?.name || "Padel Courts"}
                   </span>
                 </div>
                 <div className="flex justify-between">

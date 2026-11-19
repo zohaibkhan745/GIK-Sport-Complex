@@ -36,7 +36,7 @@ describe("Facility List / Home Component", () => {
     {
       id: "fac-2",
       slug: "demo-table-tennis",
-      name: "[Demo] Table Tennis Arena",
+      name: "[Demo] Table Tennis Hall",
       description: null,
       location: null,
       status: "maintenance",
@@ -89,7 +89,7 @@ describe("Facility List / Home Component", () => {
       expect(
         screen.getByText("[Demo] Campus Badminton Court")
       ).toBeInTheDocument();
-      expect(screen.getByText("[Demo] Table Tennis Arena")).toBeInTheDocument();
+      expect(screen.getByText("[Demo] Table Tennis Hall")).toBeInTheDocument();
     });
 
     const badmintonLink = screen
@@ -100,7 +100,7 @@ describe("Facility List / Home Component", () => {
       "/facilities/demo-badminton-court"
     );
 
-    const ttLink = screen.getByText("[Demo] Table Tennis Arena").closest("a");
+    const ttLink = screen.getByText("[Demo] Table Tennis Hall").closest("a");
     expect(ttLink).toHaveAttribute("href", "/facilities/demo-table-tennis");
   });
 

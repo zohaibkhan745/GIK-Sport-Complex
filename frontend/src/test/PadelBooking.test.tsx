@@ -62,13 +62,13 @@ describe("Padel Court Booking Client (Step 12I)", () => {
     {
       id: "fac-padel-1",
       slug: "padel-court-1",
-      name: "Glass Padel Arena (Court 1)",
+      name: "Glass Padel Court 1",
       status: "active",
     },
     {
       id: "fac-padel-2",
       slug: "padel-court-2",
-      name: "Glass Padel Arena (Court 2)",
+      name: "Glass Padel Court 2",
       status: "active",
     },
   ];
@@ -308,7 +308,7 @@ describe("Padel Court Booking Client (Step 12I)", () => {
       bookingId: "b0000000-0000-0000-0000-000000000999",
       slotId: "slot-0800",
       facilityId: "fac-padel-1",
-      facilityName: "Glass Padel Arena (Court 1)",
+      facilityName: "Glass Padel Court 1",
       startTime: "2026-11-14T08:00:00Z",
       endTime: "2026-11-14T09:00:00Z",
       status: "CONFIRMED",
@@ -368,7 +368,7 @@ describe("Padel Court Booking Client (Step 12I)", () => {
       bookingId: "b0000000-0000-0000-0000-000000000999",
       slotId: "slot-0800",
       facilityId: "fac-padel-1",
-      facilityName: "Glass Padel Arena (Court 1)",
+      facilityName: "Glass Padel Court 1",
       userId: "usr-student-alice",
       userName: "Alice Student",
       userEmail: "alice@giki.test",

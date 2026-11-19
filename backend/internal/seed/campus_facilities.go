@@ -13,10 +13,10 @@ func CampusFacilityFixtures() []FacilityFixture {
 	return []FacilityFixture{
 		{
 			ID:          uuid.MustParse("c0000001-0000-4000-8000-000000000001"),
-			Slug:        "glass-padel-arena",
-			Name:        "GIKI Glass Padel Arena",
+			Slug:        "glass-padel-courts",
+			Name:        "GIKI Glass Padel Courts",
 			Description: strPtr("Panoramic tempered glass, synthetic turf, and 800 Lux LED tournament floodlights across two championship-grade courts. Online slot booking available."),
-			Location:    strPtr("Sports Complex, Outdoor Arena North"),
+			Location:    strPtr("Sports Complex, Outdoor Courts North"),
 			Status:      "active",
 			Schedules: []ScheduleFixture{
 				{
@@ -301,8 +301,8 @@ func CampusFacilityFixtures() []FacilityFixture {
 		},
 		{
 			ID:          uuid.MustParse("c0000006-0000-4000-8000-000000000006"),
-			Slug:        "floodlit-futsal-arena",
-			Name:        "GIKI Floodlit Futsal Arena",
+			Slug:        "floodlit-futsal-court",
+			Name:        "GIKI Floodlit Futsal Court",
 			Description: strPtr("A floodlit, FIFA Quality artificial turf pitch with rebound netting, built for fast, physical five-a-side football."),
 			Location:    strPtr("Sports Complex Central Courtyard"),
 			Status:      "active",
@@ -391,8 +391,8 @@ func CampusFacilityFixtures() []FacilityFixture {
 		},
 		{
 			ID:          uuid.MustParse("c0000008-0000-4000-8000-000000000008"),
-			Slug:        "table-tennis-arena",
-			Name:        "Table Tennis Arena",
+			Slug:        "table-tennis-hall",
+			Name:        "Table Tennis Hall",
 			Description: strPtr("Six ITTF-approved Butterfly tournament tables in a dedicated hall, open for casual play and club training alike."),
 			Location:    strPtr("Indoor Complex, Mezzanine Hall"),
 			Status:      "active",

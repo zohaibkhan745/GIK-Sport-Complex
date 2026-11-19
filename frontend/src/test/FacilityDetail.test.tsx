@@ -56,7 +56,7 @@ describe("Facility Detail Page Component", () => {
   const nullableFacility: Facility = {
     id: "fac-2",
     slug: "demo-table-tennis",
-    name: "[Demo] Table Tennis Arena",
+    name: "[Demo] Table Tennis Hall",
     description: null,
     location: null,
     status: "maintenance",
@@ -150,7 +150,7 @@ describe("Facility Detail Page Component", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("[Demo] Table Tennis Arena")
+        screen.getByText("[Demo] Table Tennis Hall")
       ).toBeInTheDocument();
     });
 

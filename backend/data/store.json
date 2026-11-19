@@ -2,10 +2,10 @@
   "facilities": [
     {
       "id": "padel-court-1",
-      "name": "GIKI Glass Padel Arena (Court 1)",
+      "name": "GIKI Glass Padel Court 1",
       "category": "Racquet",
       "description": "State-of-the-art panoramic tempered glass court with high-grade synthetic turf and anti-glare LED tournament lighting.",
-      "location": "Sports Complex, Outdoor Arena North",
+      "location": "Sports Complex, Outdoor Courts North",
       "maxPlayers": 4,
       "studentTimings": "06:00 AM - 11:00 AM \u0026 04:00 PM - 11:00 PM",
       "facultyTimings": "05:00 PM - 07:00 PM (Reserved Priority Slot)",
@@ -40,10 +40,10 @@
     },
     {
       "id": "padel-court-2",
-      "name": "GIKI Glass Padel Arena (Court 2)",
+      "name": "GIKI Glass Padel Court 2",
       "category": "Racquet",
       "description": "Tournament standard court configured for doubles \u0026 singles match play with spectator seating deck.",
-      "location": "Sports Complex, Outdoor Arena North",
+      "location": "Sports Complex, Outdoor Courts North",
       "maxPlayers": 4,
       "studentTimings": "06:00 AM - 11:00 AM \u0026 04:00 PM - 11:00 PM",
       "facultyTimings": "06:00 PM - 08:00 PM (Reserved Priority Slot)",
@@ -184,8 +184,8 @@
       "isMembershipRequired": false
     },
     {
-      "id": "futsal-arena",
-      "name": "GIKI Floodlit Futsal Arena",
+      "id": "futsal-court",
+      "name": "GIKI Floodlit Futsal Court",
       "category": "Outdoor",
       "description": "FIFA Quality certified artificial turf pitch with side rebound netting and digital score display.",
       "location": "Sports Complex Central Courtyard",
@@ -217,12 +217,12 @@
         "Goalkeeper Gloves"
       ],
       "image": "https://images.unsplash.com/photo-1529900245534-47fbf024a16d?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
-      "badge": "Night Arena",
+      "badge": "Floodlit",
       "isMembershipRequired": false
     },
     {
       "id": "table-tennis",
-      "name": "Table Tennis Arena (6 Tables)",
+      "name": "Table Tennis Hall (6 Tables)",
       "category": "Indoor",
       "description": "Equipped with 6 ITTF approved Butterfly Centrefold 25 tournament tables with tournament lighting.",
       "location": "Indoor Complex, Mezzanine Hall",
@@ -336,7 +336,7 @@
     {
       "id": "BK-10492",
       "facilityId": "padel-court-1",
-      "facilityName": "GIKI Glass Padel Arena (Court 1)",
+      "facilityName": "GIKI Glass Padel Court 1",
       "date": "2026-09-26",
       "timeSlot": "18:00 - 19:00",
       "bookerType": "student",
@@ -355,7 +355,7 @@
     {
       "id": "BK-10493",
       "facilityId": "padel-court-1",
-      "facilityName": "GIKI Glass Padel Arena (Court 1)",
+      "facilityName": "GIKI Glass Padel Court 1",
       "date": "2026-09-26",
       "timeSlot": "19:00 - 20:00",
       "bookerType": "faculty",
@@ -415,7 +415,7 @@
       "description": "The GIKI Varsity Padel squad displayed masterclass tactical precision and endurance, overcoming IBA Karachi in a thrilling 3-set finale (6-4, 4-6, 7-5) to hoist the national trophy.",
       "teamMembers": "Hamza Tariq (Captain), Daniyal Munir, Saad Ali, Rayyan Shah",
       "image": "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format\u0026fit=crop\u0026w=1200\u0026q=80",
-      "directorNote": "Historic victory for GIKI in the rapidly growing paddle arena! Our investments in the glass courts are already generating national championships.",
+      "directorNote": "Historic victory for GIKI in the rapidly growing padel scene! Our investments in the glass courts are already generating national championships.",
       "featured": true,
       "createdAt": "2026-09-16T01:36:02.7888044+05:00"
     },

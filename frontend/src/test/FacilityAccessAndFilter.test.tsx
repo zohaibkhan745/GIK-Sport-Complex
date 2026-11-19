@@ -8,10 +8,10 @@ import type { Facility } from "../types";
 const mockFacilities: Facility[] = [
   {
     id: "fac-padel",
-    slug: "glass-padel-arena",
-    name: "GIKI Glass Padel Arena",
+    slug: "glass-padel-courts",
+    name: "GIKI Glass Padel Courts",
     description: "Championship glass courts with floodlights",
-    location: "Outdoor Arena North",
+    location: "Outdoor Courts North",
     status: "active",
     schedules: [
       {
@@ -98,18 +98,18 @@ describe("FacilityCard Component (Access Model Specialization)", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText("GIKI Glass Padel Arena")).toBeInTheDocument();
+    expect(screen.getByText("GIKI Glass Padel Courts")).toBeInTheDocument();
     expect(screen.queryByText("Online Booking")).not.toBeInTheDocument();
     expect(screen.queryByText("Women-Only")).not.toBeInTheDocument();
 
     const bookLink = screen.getByRole("link", { name: /book (court|slot)/i });
     expect(bookLink).toHaveAttribute(
       "href",
-      "/padel?facility=glass-padel-arena"
+      "/padel?facility=glass-padel-courts"
     );
 
-    const titleLink = screen.getByText("GIKI Glass Padel Arena").closest("a");
-    expect(titleLink).toHaveAttribute("href", "/facilities/glass-padel-arena");
+    const titleLink = screen.getByText("GIKI Glass Padel Courts").closest("a");
+    expect(titleLink).toHaveAttribute("href", "/facilities/glass-padel-courts");
   });
 
   it("renders clean Gym facility card with direct 'Get Pass' button and without redundant badges", () => {
@@ -184,7 +184,7 @@ describe("FacilitiesGrid Component (Clean Streamlined Grid)", () => {
     );
 
     // Verify all 4 mock facilities render directly
-    expect(screen.getByText("GIKI Glass Padel Arena")).toBeInTheDocument();
+    expect(screen.getByText("GIKI Glass Padel Courts")).toBeInTheDocument();
     expect(screen.getByText("GIKI Central Fitness & Strength Gym")).toBeInTheDocument();
     expect(screen.getByText("Indoor Badminton Championship Hall")).toBeInTheDocument();
     expect(screen.getByText("Semi-Olympic Swimming Pool")).toBeInTheDocument();

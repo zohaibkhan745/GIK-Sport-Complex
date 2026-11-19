@@ -171,9 +171,23 @@ func (r *PostgresRepository) List(ctx context.Context) ([]Facility, error) {
 	return facilities, nil
 }
 
+func resolveFacilitySlug(slug string) string {
+	switch strings.TrimSpace(slug) {
+	case "glass-padel-arena":
+		return "glass-padel-courts"
+	case "floodlit-futsal-arena":
+		return "floodlit-futsal-court"
+	case "table-tennis-arena":
+		return "table-tennis-hall"
+	default:
+		return strings.TrimSpace(slug)
+	}
+}
+
 // GetBySlug retrieves a single facility and its recurring weekly schedules by URL slug.
 // If the slug does not exist, returns ErrNotFound.
 func (r *PostgresRepository) GetBySlug(ctx context.Context, slug string) (*Facility, error) {
+	resolvedSlug := resolveFacilitySlug(slug)
 	const getFacilityBySlugSQL = `
 		SELECT 
 			id, 
@@ -192,7 +206,7 @@ func (r *PostgresRepository) GetBySlug(ctx context.Context, slug string) (*Facil
 	var desc, loc *string
 	var statusStr string
 
-	err := r.pool.QueryRow(ctx, getFacilityBySlugSQL, slug).Scan(
+	err := r.pool.QueryRow(ctx, getFacilityBySlugSQL, resolvedSlug).Scan(
 		&f.ID,
 		&f.Slug,
 		&f.Name,
@@ -272,7 +286,7 @@ func (r *PostgresRepository) GetBySlug(ctx context.Context, slug string) (*Facil
 // If the proposed window collides with another existing window on (facility_id, day_of_week, audience, start_time, end_time),
 // the unique constraint uq_schedules_window is caught and mapped to ErrDuplicateSchedule.
 func (r *PostgresRepository) UpdateSchedule(ctx context.Context, facilitySlug string, scheduleID uuid.UUID, input UpdateScheduleInput) (*Schedule, error) {
-	cleanSlug := strings.TrimSpace(facilitySlug)
+	cleanSlug := resolveFacilitySlug(facilitySlug)
 	if cleanSlug == "" || scheduleID == uuid.Nil {
 		return nil, &ScheduleNotFoundError{FacilitySlug: facilitySlug, ScheduleID: scheduleID}
 	}
@@ -375,7 +389,7 @@ func (r *PostgresRepository) UpdateScheduleWithAudit(
 	input UpdateScheduleInput,
 	audit AuditParams,
 ) (*Schedule, error) {
-	cleanSlug := strings.TrimSpace(facilitySlug)
+	cleanSlug := resolveFacilitySlug(facilitySlug)
 	if cleanSlug == "" || scheduleID == uuid.Nil {
 		return nil, &ScheduleNotFoundError{FacilitySlug: facilitySlug, ScheduleID: scheduleID}
 	}
@@ -569,7 +583,7 @@ func (r *PostgresRepository) DeleteScheduleWithAudit(
 	scheduleID uuid.UUID,
 	audit AuditParams,
 ) error {
-	cleanSlug := strings.TrimSpace(facilitySlug)
+	cleanSlug := resolveFacilitySlug(facilitySlug)
 	if cleanSlug == "" || scheduleID == uuid.Nil {
 		return &ScheduleNotFoundError{FacilitySlug: facilitySlug, ScheduleID: scheduleID}
 	}
@@ -714,7 +728,7 @@ func (r *PostgresRepository) CreateScheduleWithAudit(
 	input CreateScheduleInput,
 	audit AuditParams,
 ) (*Schedule, error) {
-	cleanSlug := strings.TrimSpace(facilitySlug)
+	cleanSlug := resolveFacilitySlug(facilitySlug)
 	if cleanSlug == "" {
 		return nil, &NotFoundError{Slug: facilitySlug}
 	}

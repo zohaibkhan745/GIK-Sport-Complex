@@ -2,9 +2,9 @@ import type { LegacyFacility } from "../types";
 
 export const FACILITIES: LegacyFacility[] = [
   {
-    slug: "glass-padel-arena",
-    name: "GIKI Glass Padel Arena",
-    shortName: "Padel Arena",
+    slug: "glass-padel-courts",
+    name: "GIKI Glass Padel Courts",
+    shortName: "Padel Courts",
     tagline: "Court 1 & 2 — panoramic tempered glass, synthetic turf",
     description:
       "Panoramic tempered glass, synthetic turf, and 800 Lux LED tournament floodlights across two championship-grade courts.",
@@ -86,9 +86,9 @@ export const FACILITIES: LegacyFacility[] = [
     galleryCount: 3,
   },
   {
-    slug: "floodlit-futsal-arena",
-    name: "GIKI Floodlit Futsal Arena",
-    shortName: "Futsal Arena",
+    slug: "floodlit-futsal-court",
+    name: "GIKI Floodlit Futsal Court",
+    shortName: "Futsal Court",
     tagline: "FIFA Quality artificial turf with rebound netting",
     description:
       "A floodlit, FIFA Quality artificial turf pitch with rebound netting, built for fast, physical five-a-side football.",
@@ -107,8 +107,8 @@ export const FACILITIES: LegacyFacility[] = [
     galleryCount: 3,
   },
   {
-    slug: "table-tennis-arena",
-    name: "Table Tennis Arena",
+    slug: "table-tennis-hall",
+    name: "Table Tennis Hall",
     shortName: "Table Tennis",
     tagline: "6 ITTF-approved Butterfly tournament tables",
     description:
