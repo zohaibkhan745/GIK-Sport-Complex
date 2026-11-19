@@ -68,8 +68,9 @@ describe("Facility Detail Page Component", () => {
   });
 
   const renderWithRoute = (initialPath: string) => {
+    const target = initialPath.includes("?") ? initialPath : `${initialPath}?day=all`;
     return render(
-      <MemoryRouter initialEntries={[initialPath]}>
+      <MemoryRouter initialEntries={[target]}>
         <Routes>
           <Route path="/facilities/:slug" element={<FacilityDetail />} />
         </Routes>
@@ -322,9 +323,10 @@ describe("Facility Detail Page Component", () => {
       initialPath: string,
       user: AuthUser | null = null
     ) => {
+      const target = initialPath.includes("?") ? initialPath : `${initialPath}?day=all`;
       return render(
         <AuthContext.Provider value={createMockAuthContext(user)}>
-          <MemoryRouter initialEntries={[initialPath]}>
+          <MemoryRouter initialEntries={[target]}>
             <Routes>
               <Route path="/facilities/:slug" element={<FacilityDetail />} />
             </Routes>
@@ -866,9 +868,10 @@ describe("Facility Detail Page Component", () => {
       initialPath: string,
       user: AuthUser | null = null
     ) => {
+      const target = initialPath.includes("?") ? initialPath : `${initialPath}?day=all`;
       return render(
         <AuthContext.Provider value={createMockAuthContext(user)}>
-          <MemoryRouter initialEntries={[initialPath]}>
+          <MemoryRouter initialEntries={[target]}>
             <Routes>
               <Route path="/facilities/:slug" element={<FacilityDetail />} />
             </Routes>
@@ -1508,9 +1511,10 @@ describe("Facility Detail Page Component", () => {
       initialPath: string,
       user: AuthUser | null = null
     ) => {
+      const target = initialPath.includes("?") ? initialPath : `${initialPath}?day=all`;
       return render(
         <AuthContext.Provider value={createMockAuthContext(user)}>
-          <MemoryRouter initialEntries={[initialPath]}>
+          <MemoryRouter initialEntries={[target]}>
             <Routes>
               <Route path="/facilities/:slug" element={<FacilityDetail />} />
             </Routes>
@@ -1982,6 +1986,235 @@ describe("Facility Detail Page Component", () => {
           });
         });
       }).not.toThrow();
+    });
+  });
+
+  describe("Daily Schedule Filter & Today Default", () => {
+    it("renders day selector tabs with Mon-Sun and All Week", async () => {
+      vi.mocked(api.getFacility).mockResolvedValue(completeFacility);
+
+      render(
+        <MemoryRouter initialEntries={["/facilities/demo-badminton-court"]}>
+          <Routes>
+            <Route path="/facilities/:slug" element={<FacilityDetail />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("schedule-day-tabs")).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId("day-tab-1")).toBeInTheDocument();
+      expect(screen.getByTestId("day-tab-2")).toBeInTheDocument();
+      expect(screen.getByTestId("day-tab-3")).toBeInTheDocument();
+      expect(screen.getByTestId("day-tab-4")).toBeInTheDocument();
+      expect(screen.getByTestId("day-tab-5")).toBeInTheDocument();
+      expect(screen.getByTestId("day-tab-6")).toBeInTheDocument();
+      expect(screen.getByTestId("day-tab-7")).toBeInTheDocument();
+      expect(screen.getByTestId("day-tab-all")).toBeInTheDocument();
+      expect(screen.getByText("Today")).toBeInTheDocument();
+    });
+
+    it("defaults to today's schedule and allows switching to another day", async () => {
+      vi.mocked(api.getFacility).mockResolvedValue(completeFacility);
+
+      render(
+        <MemoryRouter initialEntries={["/facilities/demo-badminton-court"]}>
+          <Routes>
+            <Route path="/facilities/:slug" element={<FacilityDetail />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("schedule-day-tabs")).toBeInTheDocument();
+      });
+
+      // Switch to Monday (day 1)
+      fireEvent.click(screen.getByTestId("day-tab-1"));
+
+      expect(screen.getByText(/Timings for/i)).toHaveTextContent("Timings for Monday");
+      expect(screen.getByTestId("schedule-row-sched-1")).toBeInTheDocument();
+      expect(screen.queryByTestId("schedule-row-sched-2")).not.toBeInTheDocument();
+    });
+
+    it("shows empty state when selected day has no operating hours", async () => {
+      vi.mocked(api.getFacility).mockResolvedValue(completeFacility);
+
+      render(
+        <MemoryRouter initialEntries={["/facilities/demo-badminton-court?day=2"]}>
+          <Routes>
+            <Route path="/facilities/:slug" element={<FacilityDetail />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("schedule-day-empty")).toBeInTheDocument();
+      });
+
+      expect(screen.getByText(/No operating hours scheduled for Tuesday/i)).toBeInTheDocument();
+    });
+
+    it("displays all schedules when All Week tab is clicked", async () => {
+      vi.mocked(api.getFacility).mockResolvedValue(completeFacility);
+
+      render(
+        <MemoryRouter initialEntries={["/facilities/demo-badminton-court"]}>
+          <Routes>
+            <Route path="/facilities/:slug" element={<FacilityDetail />} />
+          </Routes>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("schedule-day-tabs")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("day-tab-all"));
+
+      expect(screen.getByTestId("schedule-row-sched-1")).toBeInTheDocument();
+      expect(screen.getByTestId("schedule-row-sched-2")).toBeInTheDocument();
+      expect(screen.getByText(/weekly operating windows across all days/i)).toBeInTheDocument();
+    });
+  });
+
+  describe("Multi-Day / Bulk Schedule Application", () => {
+    it("reveals day selector pills when 'Apply to multiple days' is checked and toggles weekdays", async () => {
+      vi.mocked(api.getFacility).mockResolvedValue(completeFacility);
+
+      render(
+        <AuthContext.Provider
+          value={{
+            user: {
+              id: "usr-director",
+              email: "director@example.test",
+              displayName: "Director User",
+              roles: ["sports_director"],
+            },
+            isLoading: false,
+            checkError: null,
+            logoutError: null,
+            login: vi.fn(),
+            logout: vi.fn(),
+            retryCheckSession: vi.fn(),
+            clearLogoutError: vi.fn(),
+          }}
+        >
+          <MemoryRouter initialEntries={["/facilities/demo-badminton-court?day=all"]}>
+            <Routes>
+              <Route path="/facilities/:slug" element={<FacilityDetail />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("add-schedule-window-btn")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("add-schedule-window-btn"));
+
+      const multiCheckbox = screen.getByTestId("toggle-multi-day-checkbox");
+      expect(multiCheckbox).not.toBeChecked();
+
+      fireEvent.click(multiCheckbox);
+      expect(multiCheckbox).toBeChecked();
+
+      // Check that multi-day container and buttons are visible
+      expect(screen.getByTestId("multi-day-pills-container")).toBeInTheDocument();
+      expect(screen.getByText("Weekdays (Mon–Fri)")).toBeInTheDocument();
+      expect(screen.getByText("Every Day")).toBeInTheDocument();
+      expect(screen.getByText("Weekends")).toBeInTheDocument();
+
+      // Click "Weekdays (Mon-Fri)"
+      fireEvent.click(screen.getByText("Weekdays (Mon–Fri)"));
+
+      expect(screen.getByTestId("multi-day-btn-1")).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTestId("multi-day-btn-2")).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTestId("multi-day-btn-3")).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTestId("multi-day-btn-4")).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTestId("multi-day-btn-5")).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTestId("multi-day-btn-6")).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("creates recurring schedules for multiple selected days in batch", async () => {
+      vi.mocked(api.getFacility).mockResolvedValue(completeFacility);
+      vi.mocked(api.createSchedule)
+        .mockResolvedValueOnce({
+          id: "sched-tue",
+          dayOfWeek: 2,
+          startTime: "14:00:00",
+          endTime: "16:00:00",
+          audience: "student",
+        })
+        .mockResolvedValueOnce({
+          id: "sched-thu",
+          dayOfWeek: 4,
+          startTime: "14:00:00",
+          endTime: "16:00:00",
+          audience: "student",
+        });
+
+      render(
+        <AuthContext.Provider
+          value={{
+            user: {
+              id: "usr-director",
+              email: "director@example.test",
+              displayName: "Director User",
+              roles: ["sports_director"],
+            },
+            isLoading: false,
+            checkError: null,
+            logoutError: null,
+            login: vi.fn(),
+            logout: vi.fn(),
+            retryCheckSession: vi.fn(),
+            clearLogoutError: vi.fn(),
+          }}
+        >
+          <MemoryRouter initialEntries={["/facilities/demo-badminton-court?day=all"]}>
+            <Routes>
+              <Route path="/facilities/:slug" element={<FacilityDetail />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("add-schedule-window-btn")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("add-schedule-window-btn"));
+
+      fireEvent.change(screen.getByLabelText("Start time"), {
+        target: { value: "14:00:00" },
+      });
+      fireEvent.change(screen.getByLabelText("End time"), {
+        target: { value: "16:00:00" },
+      });
+
+      // Enable multi-day
+      fireEvent.click(screen.getByTestId("toggle-multi-day-checkbox"));
+
+      // Click Tuesday and Thursday
+      fireEvent.click(screen.getByText("Weekends")); // sets to [6, 7]
+      fireEvent.click(screen.getByTestId("multi-day-btn-6")); // deselect Sat
+      fireEvent.click(screen.getByTestId("multi-day-btn-7")); // deselect Sun
+      fireEvent.click(screen.getByTestId("multi-day-btn-2")); // select Tue
+      fireEvent.click(screen.getByTestId("multi-day-btn-4")); // select Thu
+
+      fireEvent.click(screen.getByTestId("submit-add-schedule-btn"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("schedule-success-banner")).toBeInTheDocument();
+      });
+
+      expect(vi.mocked(api.createSchedule)).toHaveBeenCalledTimes(2);
+      expect(screen.getByTestId("schedule-row-sched-tue")).toBeInTheDocument();
+      expect(screen.getByTestId("schedule-row-sched-thu")).toBeInTheDocument();
     });
   });
 });

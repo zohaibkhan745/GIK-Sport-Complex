@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   Activity,
@@ -54,6 +54,57 @@ function parseTimeToSeconds(val: string, allow24: boolean): number | null {
   return h * 3600 + m * 60 + s;
 }
 
+export function getPKTDayOfWeek(now = new Date()): number {
+  try {
+    const str = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Karachi",
+      weekday: "short",
+    }).format(now);
+    const map: Record<string, number> = {
+      Mon: 1,
+      Tue: 2,
+      Wed: 3,
+      Thu: 4,
+      Fri: 5,
+      Sat: 6,
+      Sun: 7,
+    };
+    return map[str] ?? 1;
+  } catch {
+    const day = now.getDay();
+    return day === 0 ? 7 : day;
+  }
+}
+
+export function isWindowActiveNow(startTime: string, endTime: string, now = new Date()): boolean {
+  try {
+    const timeStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Karachi",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(now);
+    const currentSec = parseTimeToSeconds(timeStr, false);
+    const startSec = parseTimeToSeconds(startTime, false);
+    const endSec = parseTimeToSeconds(endTime, true);
+    if (currentSec === null || startSec === null || endSec === null) return false;
+    return currentSec >= startSec && currentSec < endSec;
+  } catch {
+    return false;
+  }
+}
+
+export const WEEKDAYS = [
+  { day: 1, label: "Mon", full: "Monday" },
+  { day: 2, label: "Tue", full: "Tuesday" },
+  { day: 3, label: "Wed", full: "Wednesday" },
+  { day: 4, label: "Thu", full: "Thursday" },
+  { day: 5, label: "Fri", full: "Friday" },
+  { day: 6, label: "Sat", full: "Saturday" },
+  { day: 7, label: "Sun", full: "Sunday" },
+] as const;
+
 function sortSchedules(schedules: Schedule[]): Schedule[] {
   return [...schedules].sort((a, b) => {
     if (a.dayOfWeek !== b.dayOfWeek) {
@@ -77,6 +128,57 @@ export function FacilityDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [facility, setFacility] = useState<Facility | null>(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const todayDay = useMemo(() => getPKTDayOfWeek(), []);
+
+  const selectedDay = useMemo((): number | "all" => {
+    const dayParam = searchParams.get("day");
+    if (dayParam === "all") return "all";
+    if (dayParam) {
+      const parsed = parseInt(dayParam, 10);
+      if (parsed >= 1 && parsed <= 7) return parsed;
+    }
+    return todayDay;
+  }, [searchParams, todayDay]);
+
+  const handleSelectDay = useCallback(
+    (day: number | "all") => {
+      const newParams = new URLSearchParams(searchParams);
+      if (day === todayDay) {
+        newParams.delete("day");
+      } else {
+        newParams.set("day", day.toString());
+      }
+      setSearchParams(newParams, { replace: true });
+    },
+    [searchParams, setSearchParams, todayDay]
+  );
+
+  const scheduleCountsByDay = useMemo(() => {
+    const counts: Record<number, number> = {
+      1: 0,
+      2: 0,
+      3: 0,
+      4: 0,
+      5: 0,
+      6: 0,
+      7: 0,
+    };
+    if (!facility) return counts;
+    for (const s of facility.schedules) {
+      if (counts[s.dayOfWeek] !== undefined) {
+        counts[s.dayOfWeek]++;
+      }
+    }
+    return counts;
+  }, [facility]);
+
+  const visibleSchedules = useMemo(() => {
+    if (!facility) return [];
+    if (selectedDay === "all") return facility.schedules;
+    return facility.schedules.filter((s) => s.dayOfWeek === selectedDay);
+  }, [facility, selectedDay]);
 
   const handleGoBack = useCallback(() => {
     if (window.history.state && typeof window.history.state.idx === "number" && window.history.state.idx > 0) {
@@ -119,6 +221,8 @@ export function FacilityDetail() {
   // Inline add state: tracks creation of a new schedule window
   const [isAdding, setIsAdding] = useState<boolean>(false);
   const [addDayOfWeek, setAddDayOfWeek] = useState<number>(1);
+  const [isMultiDay, setIsMultiDay] = useState<boolean>(false);
+  const [multiDays, setMultiDays] = useState<number[]>([1]);
   const [addStartTime, setAddStartTime] = useState<string>("09:00:00");
   const [addEndTime, setAddEndTime] = useState<string>("12:00:00");
   const [addAudience, setAddAudience] = useState<string>("student");
@@ -396,7 +500,10 @@ export function FacilityDetail() {
     setDeletingScheduleId(null);
     setDeleteError(null);
     setSuccessMessage(null);
-    setAddDayOfWeek(1);
+    const initialDay = selectedDay === "all" ? 1 : selectedDay;
+    setAddDayOfWeek(initialDay);
+    setIsMultiDay(false);
+    setMultiDays([initialDay]);
     setAddStartTime("09:00:00");
     setAddEndTime("12:00:00");
     setAddAudience("student");
@@ -407,6 +514,7 @@ export function FacilityDetail() {
   const cancelAdding = () => {
     if (isSavingAdd) return;
     setIsAdding(false);
+    setIsMultiDay(false);
     setAddError(null);
     setTimeout(() => {
       addWindowButtonRef.current?.focus();
@@ -416,8 +524,15 @@ export function FacilityDetail() {
   const handleAddSave = async () => {
     if (isSavingAdd || !slug) return;
 
+    const targetDays = isMultiDay ? multiDays : [addDayOfWeek];
+
+    if (targetDays.length === 0) {
+      setAddError("Please select at least one day to apply this schedule.");
+      return;
+    }
+
     const clientErr = validateScheduleWindow(
-      addDayOfWeek,
+      targetDays[0],
       addStartTime,
       addEndTime,
       addAudience
@@ -427,42 +542,90 @@ export function FacilityDetail() {
       return;
     }
 
-    const payload: CreateScheduleInput = {
-      dayOfWeek: addDayOfWeek,
-      startTime: normalizeTimeToSeconds(addStartTime),
-      endTime: normalizeTimeToSeconds(addEndTime),
-      audience: addAudience,
-    };
-
     const targetSlug = slug;
     setIsSavingAdd(true);
     setAddError(null);
 
-    try {
-      const createdSchedule = await api.createSchedule(targetSlug, payload);
+    const createdSchedules: Schedule[] = [];
+    const duplicateDays: number[] = [];
 
-      // Guard against late response after navigating away
+    try {
+      for (const day of targetDays) {
+        const payload: CreateScheduleInput = {
+          dayOfWeek: day,
+          startTime: normalizeTimeToSeconds(addStartTime),
+          endTime: normalizeTimeToSeconds(addEndTime),
+          audience: addAudience,
+        };
+
+        try {
+          const created = await api.createSchedule(targetSlug, payload);
+          createdSchedules.push(created);
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 409) {
+            duplicateDays.push(day);
+          } else {
+            throw err;
+          }
+        }
+      }
+
       if (!isMountedRef.current || currentSlugRef.current !== targetSlug) {
         return;
       }
 
-      setFacility((prev) => {
-        if (!prev || prev.slug !== targetSlug) return prev;
-        return {
-          ...prev,
-          schedules: sortSchedules([...prev.schedules, createdSchedule]),
-        };
-      });
+      if (createdSchedules.length > 0) {
+        setFacility((prev) => {
+          if (!prev || prev.slug !== targetSlug) return prev;
+          return {
+            ...prev,
+            schedules: sortSchedules([...prev.schedules, ...createdSchedules]),
+          };
+        });
 
-      setIsAdding(false);
-      setAddError(null);
-      setSuccessMessage("Schedule window added successfully.");
+        setIsAdding(false);
+        setAddError(null);
+        setIsMultiDay(false);
+
+        if (duplicateDays.length > 0) {
+          const dupNames = duplicateDays.map((d) => WEEKDAY_NAMES[d]).join(", ");
+          setSuccessMessage(
+            `Added schedule for ${createdSchedules.length} ${
+              createdSchedules.length === 1 ? "day" : "days"
+            }. Skipped duplicate on: ${dupNames}.`
+          );
+        } else if (createdSchedules.length === 1) {
+          if (selectedDay !== "all" && selectedDay !== createdSchedules[0].dayOfWeek) {
+            handleSelectDay(createdSchedules[0].dayOfWeek);
+          }
+          setSuccessMessage("Schedule window added successfully.");
+        } else {
+          setSuccessMessage(
+            `Schedule windows added successfully for ${createdSchedules.length} days (repeats weekly).`
+          );
+        }
+      } else if (duplicateDays.length > 0) {
+        setAddError(
+          targetDays.length === 1
+            ? "This schedule window duplicates an existing operating window for this facility."
+            : "This schedule window duplicates an existing operating window for all selected days."
+        );
+      }
     } catch (err) {
       if (!isMountedRef.current || currentSlugRef.current !== targetSlug) {
         return;
       }
 
-      // Keep draft inputs intact on failure
+      if (createdSchedules.length > 0) {
+        setFacility((prev) => {
+          if (!prev || prev.slug !== targetSlug) return prev;
+          return {
+            ...prev,
+            schedules: sortSchedules([...prev.schedules, ...createdSchedules]),
+          };
+        });
+      }
+
       if (err instanceof ApiError) {
         if (err.status === 400) {
           setAddError(err.message || "Invalid schedule window input.");
@@ -842,6 +1005,118 @@ export function FacilityDetail() {
                 )}
               </div>
 
+              {/* Day Selector Tabs */}
+              {facility.schedules.length > 0 && (
+                <div
+                  role="tablist"
+                  aria-label="Operating Schedule Days"
+                  data-testid="schedule-day-tabs"
+                  className="mt-4 flex flex-wrap items-center gap-1.5 pb-1"
+                >
+                  {WEEKDAYS.map(({ day, label, full }) => {
+                    const isSelected = selectedDay === day;
+                    const isToday = day === todayDay;
+                    const count = scheduleCountsByDay[day];
+
+                    return (
+                      <button
+                        key={day}
+                        type="button"
+                        role="tab"
+                        id={`day-tab-${day}`}
+                        data-testid={`day-tab-${day}`}
+                        aria-selected={isSelected}
+                        aria-label={`${full}${isToday ? " (Today)" : ""}, ${count} scheduled ${
+                          count === 1 ? "window" : "windows"
+                        }`}
+                        onClick={() => handleSelectDay(day)}
+                        className={`relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                          isSelected
+                            ? isToday
+                              ? "bg-[var(--color-maroon)] text-white shadow-xs"
+                              : "bg-[var(--color-navy)] text-white shadow-xs"
+                            : "bg-white text-[var(--color-navy)] border border-[var(--color-border)] hover:bg-[var(--color-surface)]"
+                        }`}
+                      >
+                        <span>{label}</span>
+                        {isToday && (
+                          <span
+                            className={`rounded-full px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider ${
+                              isSelected
+                                ? "bg-white/20 text-white"
+                                : "bg-[var(--color-maroon)]/10 text-[var(--color-maroon)]"
+                            }`}
+                          >
+                            Today
+                          </span>
+                        )}
+                        {count > 0 && !isToday && (
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              isSelected
+                                ? "bg-[var(--color-gold)]"
+                                : "bg-[var(--color-navy-soft)]"
+                            }`}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+
+                  <div className="hidden sm:block h-4 w-px bg-[var(--color-border)] mx-1" />
+
+                  {/* All Week Tab */}
+                  <button
+                    type="button"
+                    role="tab"
+                    id="day-tab-all"
+                    data-testid="day-tab-all"
+                    aria-selected={selectedDay === "all"}
+                    aria-label={`All Week, ${facility.schedules.length} total scheduled windows`}
+                    onClick={() => handleSelectDay("all")}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                      selectedDay === "all"
+                        ? "bg-[var(--color-navy)] text-white shadow-xs"
+                        : "bg-white text-[var(--color-navy-soft)] border border-[var(--color-border)] hover:text-[var(--color-navy)] hover:bg-[var(--color-surface)]"
+                    }`}
+                  >
+                    All Week
+                  </button>
+                </div>
+              )}
+
+              {/* Active Day Subtitle / Filter Info */}
+              {facility.schedules.length > 0 && (
+                <div className="mt-3 flex items-center justify-between text-xs text-[var(--color-navy-soft)]">
+                  <p>
+                    {selectedDay === "all" ? (
+                      <span>
+                        Showing all{" "}
+                        <strong className="text-[var(--color-navy)] font-semibold">
+                          {facility.schedules.length}
+                        </strong>{" "}
+                        weekly operating windows across all days
+                      </span>
+                    ) : (
+                      <span>
+                        Timings for{" "}
+                        <strong className="text-[var(--color-navy)] font-semibold">
+                          {typeof selectedDay === "number"
+                            ? WEEKDAY_NAMES[selectedDay]
+                            : "All Days"}
+                        </strong>
+                        {selectedDay === todayDay ? " (Today)" : ""}:
+                      </span>
+                    )}
+                  </p>
+                  {selectedDay !== "all" && selectedDay === todayDay && (
+                    <span className="text-[11px] font-medium text-[var(--color-maroon)]">
+                      PKT local time
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* Success Notification Banner */}
               {successMessage && (
                 <div
@@ -1005,6 +1280,97 @@ export function FacilityDetail() {
                       </div>
                     </div>
 
+                    {/* Multi-Day / Recurring Weekly Application */}
+                    <div className="pt-2 border-t border-[var(--color-border)]/60">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[var(--color-navy)]">
+                          <input
+                            type="checkbox"
+                            data-testid="toggle-multi-day-checkbox"
+                            aria-label="Apply to multiple days"
+                            checked={isMultiDay}
+                            disabled={isSavingAdd}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setIsMultiDay(checked);
+                              if (checked && multiDays.length === 0) {
+                                setMultiDays([addDayOfWeek]);
+                              }
+                            }}
+                            className="h-3.5 w-3.5 rounded border-[var(--color-border)] text-[var(--color-maroon)] focus:ring-[var(--color-gold)] cursor-pointer"
+                          />
+                          <span>Apply to multiple days (recurring weekly)</span>
+                        </label>
+
+                        {isMultiDay && (
+                          <div className="flex flex-wrap items-center gap-1 text-[11px]">
+                            <button
+                              type="button"
+                              disabled={isSavingAdd}
+                              onClick={() => setMultiDays([1, 2, 3, 4, 5])}
+                              className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-navy-soft)] hover:text-[var(--color-navy)] hover:bg-[var(--color-surface)] cursor-pointer"
+                            >
+                              Weekdays (Mon–Fri)
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSavingAdd}
+                              onClick={() => setMultiDays([1, 2, 3, 4, 5, 6, 7])}
+                              className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-navy-soft)] hover:text-[var(--color-navy)] hover:bg-[var(--color-surface)] cursor-pointer"
+                            >
+                              Every Day
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSavingAdd}
+                              onClick={() => setMultiDays([6, 7])}
+                              className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-navy-soft)] hover:text-[var(--color-navy)] hover:bg-[var(--color-surface)] cursor-pointer"
+                            >
+                              Weekends
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {isMultiDay && (
+                        <div
+                          data-testid="multi-day-pills-container"
+                          className="mt-2.5 flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-[var(--color-border)]/40"
+                        >
+                          <span className="text-[11px] font-medium text-[var(--color-navy-soft)] mr-1">
+                            Days:
+                          </span>
+                          {WEEKDAYS.map(({ day, label, full }) => {
+                            const isChecked = multiDays.includes(day);
+                            return (
+                              <button
+                                key={day}
+                                type="button"
+                                disabled={isSavingAdd}
+                                onClick={() => {
+                                  setMultiDays((prev) =>
+                                    prev.includes(day)
+                                      ? prev.filter((d) => d !== day)
+                                      : [...prev, day].sort((a, b) => a - b)
+                                  );
+                                }}
+                                data-testid={`multi-day-btn-${day}`}
+                                aria-label={`Toggle ${full}`}
+                                aria-pressed={isChecked}
+                                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                                  isChecked
+                                    ? "bg-[var(--color-maroon)] text-white shadow-2xs"
+                                    : "border border-[var(--color-border)] bg-white text-[var(--color-navy)] hover:bg-[var(--color-surface)]"
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="mt-4 flex items-center justify-end gap-2 pt-2 border-t border-[var(--color-border)]">
                       <button
                         type="button"
@@ -1060,9 +1426,54 @@ export function FacilityDetail() {
                     </div>
                   )}
                 </div>
+              ) : visibleSchedules.length === 0 ? (
+                <div
+                  data-testid="schedule-day-empty"
+                  className="mt-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 text-center text-sm text-[var(--color-navy-soft)]"
+                >
+                  <Clock
+                    size={28}
+                    className="mx-auto text-[var(--color-navy-soft)] mb-2 opacity-60"
+                  />
+                  <p className="font-semibold text-[var(--color-navy)]">
+                    No operating hours scheduled for{" "}
+                    {typeof selectedDay === "number"
+                      ? WEEKDAY_NAMES[selectedDay]
+                      : "this day"}{" "}
+                    {selectedDay === todayDay ? "(Today)" : ""}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--color-navy-soft)]">
+                    This facility may be closed or reserved on this day.
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectDay("all")}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-maroon)] hover:underline"
+                    >
+                      <span>View all week timetable</span>
+                      <ArrowRight size={12} />
+                    </button>
+                    {canEditSchedule && !isAdding && (
+                      <button
+                        type="button"
+                        onClick={startAdding}
+                        className="inline-flex items-center gap-1 rounded-md bg-[var(--color-maroon)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                      >
+                        <Plus size={13} />
+                        <span>
+                          Add window for{" "}
+                          {typeof selectedDay === "number"
+                            ? WEEKDAY_NAMES[selectedDay]
+                            : "this day"}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                </div>
               ) : (
                 <div className="mt-3 divide-y divide-[var(--color-border)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
-                  {facility.schedules.map((s) => {
+                  {visibleSchedules.map((s) => {
                     const isEditingThisRow = editingScheduleId === s.id;
 
                     if (isEditingThisRow) {
@@ -1389,6 +1800,15 @@ export function FacilityDetail() {
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
+                          {s.dayOfWeek === todayDay && isWindowActiveNow(s.startTime, s.endTime) && (
+                            <span
+                              data-testid={`open-now-badge-${s.id}`}
+                              className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700"
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              Open Now
+                            </span>
+                          )}
                           <span className="rounded-full bg-[var(--color-border)]/60 px-3 py-0.5 text-xs font-medium text-[var(--color-navy)]">
                             {AUDIENCE_LABELS[s.audience] ?? s.audience}
                           </span>
