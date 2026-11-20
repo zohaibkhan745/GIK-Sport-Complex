@@ -58,15 +58,14 @@ func (r *PostgresRepository) GetFacilityByID(ctx context.Context, id uuid.UUID) 
 	return &fac, nil
 }
 
-// GetPadelFacilities returns active facilities, prioritizing those with 'padel' in name or slug.
+// GetPadelFacilities returns active facilities specifically for Padel.
 func (r *PostgresRepository) GetPadelFacilities(ctx context.Context) ([]FacilitySummaryDTO, error) {
 	const query = `
 		SELECT id, slug, name, status
 		FROM giki_sports.facilities
 		WHERE status = 'active'
-		ORDER BY 
-			CASE WHEN slug ILIKE '%padel%' OR name ILIKE '%padel%' THEN 0 ELSE 1 END ASC,
-			name ASC;
+		  AND (slug ILIKE '%padel%' OR name ILIKE '%padel%')
+		ORDER BY name ASC;
 	`
 	rows, err := r.pool.Query(ctx, query)
 	if err != nil {

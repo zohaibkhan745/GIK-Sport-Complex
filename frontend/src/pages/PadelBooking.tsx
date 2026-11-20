@@ -148,19 +148,24 @@ export function PadelBooking() {
     };
   }, []);
 
-  // Fetch facilities once
+  // Fetch facilities once (strictly limited to Padel court facilities)
   useEffect(() => {
     api
       .getPadelFacilities()
       .then((data) => {
         if (!isMountedRef.current) return;
-        setFacilities(data);
+        const padelOnly = data.filter((f) => {
+          const s = (f.slug || "").toLowerCase();
+          const n = (f.name || "").toLowerCase();
+          return s.includes("padel") || n.includes("padel");
+        });
+        setFacilities(padelOnly);
         const queryFac = searchParams.get("facility");
-        if (queryFac && data.some((f) => f.id === queryFac || f.slug === queryFac)) {
-          const match = data.find((f) => f.id === queryFac || f.slug === queryFac);
+        if (queryFac && padelOnly.some((f) => f.id === queryFac || f.slug === queryFac)) {
+          const match = padelOnly.find((f) => f.id === queryFac || f.slug === queryFac);
           if (match) setSelectedFacilityId(match.id);
-        } else if (data.length > 0) {
-          setSelectedFacilityId(data[0].id);
+        } else if (padelOnly.length > 0) {
+          setSelectedFacilityId(padelOnly[0].id);
         }
       })
       .catch((err) => {
@@ -819,23 +824,33 @@ export function PadelBooking() {
             {/* Controls: Court selector & Date Picker */}
             <div className="mb-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-5">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                {/* Court / Facility Switcher */}
+                {/* Court / Facility Switcher (Restricted exclusively to Padel courts) */}
                 <div>
                   <label htmlFor="court-select" className="block text-xs font-semibold text-[var(--color-navy)] mb-1">
-                    Select Court Facility
+                    Padel Court Facility
                   </label>
-                  <select
-                    id="court-select"
-                    value={selectedFacilityId}
-                    onChange={(e) => setSelectedFacilityId(e.target.value)}
-                    className="rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-xs font-semibold text-[var(--color-navy)] focus:border-[var(--color-maroon)] focus:outline-none"
-                  >
-                    {facilities.map((fac) => (
-                      <option key={fac.id} value={fac.id}>
-                        {fac.name}
-                      </option>
-                    ))}
-                  </select>
+                  {facilities.length > 1 ? (
+                    <select
+                      id="court-select"
+                      value={selectedFacilityId}
+                      onChange={(e) => setSelectedFacilityId(e.target.value)}
+                      className="rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-xs font-semibold text-[var(--color-navy)] focus:border-[var(--color-maroon)] focus:outline-none"
+                    >
+                      {facilities.map((fac) => (
+                        <option key={fac.id} value={fac.id}>
+                          {fac.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-xs font-semibold text-[var(--color-navy)] shadow-2xs">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      <span>{selectedFacility?.name || "GIKI Glass Padel Courts"}</span>
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                        Bookable
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Date Picker Controls */}

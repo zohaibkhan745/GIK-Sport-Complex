@@ -160,9 +160,12 @@ func (s *Service) GenerateDailySlots(ctx context.Context, req GenerateSlotsReque
 		return nil, errors.New("invalid or missing facility ID")
 	}
 
-	_, err = s.repo.GetFacilityByID(ctx, facUUID)
+	fac, err := s.repo.GetFacilityByID(ctx, facUUID)
 	if err != nil {
 		return nil, err
+	}
+	if !strings.Contains(strings.ToLower(fac.Slug), "padel") && !strings.Contains(strings.ToLower(fac.Name), "padel") {
+		return nil, errors.New("court booking is strictly limited to padel court facilities")
 	}
 
 	dateStr := strings.TrimSpace(req.Date)

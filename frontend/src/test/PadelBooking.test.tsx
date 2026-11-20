@@ -158,6 +158,34 @@ describe("Padel Court Booking Client (Step 12I)", () => {
     expect(screen.getByRole("button", { name: "Hold Slot (5 min)" })).toBeInTheDocument();
   });
 
+  it("strictly filters facility list so only padel facilities have booking options", async () => {
+    vi.mocked(api.me).mockResolvedValue(mockStudentUser);
+    vi.mocked(api.getPadelFacilities).mockResolvedValue([
+      { id: "fac-padel-1", slug: "glass-padel-courts", name: "Padel Court", status: "active" },
+      { id: "fac-badminton", slug: "badminton-hall", name: "Badminton Hall", status: "active" },
+      { id: "fac-gym", slug: "central-fitness-gym", name: "Gym", status: "active" },
+      { id: "fac-pool", slug: "swimming-pool", name: "Swimming Pool", status: "active" },
+    ]);
+
+    render(
+      <MemoryRouter initialEntries={["/padel"]}>
+        <AuthProvider>
+          <Routes>
+            <Route path="/padel" element={<PadelBooking />} />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    // Only Padel Court should be rendered, not Badminton, Gym, or Swimming Pool
+    expect(await screen.findByText("Padel Court")).toBeInTheDocument();
+    expect(screen.queryByText("Badminton Hall")).not.toBeInTheDocument();
+    expect(screen.queryByText("Gym")).not.toBeInTheDocument();
+    expect(screen.queryByText("Swimming Pool")).not.toBeInTheDocument();
+    // Since only 1 padel court is in list, it renders the clean indicator with Bookable badge
+    expect(screen.getByText("Bookable")).toBeInTheDocument();
+  });
+
   // -------------------------------------------------------------------------
   // 2. Active 5-Minute Hold & Release Flow (FR-03, QR-08)
   // -------------------------------------------------------------------------
