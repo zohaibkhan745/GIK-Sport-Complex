@@ -251,3 +251,33 @@ func TestComputeMembershipSummary(t *testing.T) {
 		t.Fatalf("expected 3 history items, got %d", len(summary.History))
 	}
 }
+
+func TestCalculateTermWithCustomDuration(t *testing.T) {
+	epoch := time.Date(2026, time.November, 1, 10, 0, 0, 0, time.UTC)
+
+	// 15-day custom duration
+	dur15 := 15 * 24 * time.Hour
+	start15, end15 := CalculateTermWithDuration(epoch, dur15)
+	if end15.Sub(start15) != dur15 {
+		t.Fatalf("expected 15 days, got %v", end15.Sub(start15))
+	}
+
+	// 60-day custom duration
+	dur60 := 60 * 24 * time.Hour
+	start60, end60 := CalculateTermWithDuration(epoch, dur60)
+	if end60.Sub(start60) != dur60 {
+		t.Fatalf("expected 60 days, got %v", end60.Sub(start60))
+	}
+
+	// Renewal with custom 45-day duration
+	dur45 := 45 * 24 * time.Hour
+	existingExpiry := time.Date(2026, time.November, 20, 10, 0, 0, 0, time.UTC)
+	renewalTime := time.Date(2026, time.November, 15, 10, 0, 0, 0, time.UTC)
+	startRenew, endRenew := CalculateRenewalTermWithDuration(&existingExpiry, renewalTime, dur45)
+	if !startRenew.Equal(existingExpiry) {
+		t.Fatalf("expected start of renewal to chain from existingExpiry, got %v", startRenew)
+	}
+	if endRenew.Sub(startRenew) != dur45 {
+		t.Fatalf("expected renewed duration to be 45 days, got %v", endRenew.Sub(startRenew))
+	}
+}

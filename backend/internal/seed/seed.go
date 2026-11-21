@@ -16,7 +16,6 @@ type FacilityFixture struct {
 	Slug        string
 	Name        string
 	Description *string
-	Location    *string
 	Status      string
 	Schedules   []ScheduleFixture
 }
@@ -52,7 +51,6 @@ func DefaultDemoFixtures() []FacilityFixture {
 			Slug:        "demo-badminton-court",
 			Name:        "[Demo] Campus Badminton Court",
 			Description: strPtr("Synthetic demonstration court for local testing and timetable preview"),
-			Location:    strPtr("Demo Sports Hall Wing B"),
 			Status:      "active",
 			Schedules: []ScheduleFixture{
 				{
@@ -83,7 +81,6 @@ func DefaultDemoFixtures() []FacilityFixture {
 			Slug:        "demo-table-tennis",
 			Name:        "[Demo] Table Tennis Hall",
 			Description: strPtr("Synthetic demonstration table tennis hall for local testing"),
-			Location:    strPtr("Demo Activity Center 1st Floor"),
 			Status:      "active",
 			Schedules: []ScheduleFixture{
 				{
@@ -172,10 +169,10 @@ func ApplyFixtures(ctx context.Context, pool *pgxpool.Pool, fixtures []FacilityF
 		case 0:
 			// New fixture: insert facility
 			const insertFacSQL = `
-				INSERT INTO giki_sports.facilities (id, slug, name, description, location, status)
-				VALUES ($1, $2, $3, $4, $5, $6);
+				INSERT INTO giki_sports.facilities (id, slug, name, description, status)
+				VALUES ($1, $2, $3, $4, $5);
 			`
-			_, err = tx.Exec(ctx, insertFacSQL, fac.ID, fac.Slug, fac.Name, fac.Description, fac.Location, fac.Status)
+			_, err = tx.Exec(ctx, insertFacSQL, fac.ID, fac.Slug, fac.Name, fac.Description, fac.Status)
 			if err != nil {
 				return nil, fmt.Errorf("failed to insert demo facility %q: %w", fac.Slug, err)
 			}

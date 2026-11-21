@@ -35,8 +35,8 @@ func TestFacilityHTTP_Integration(t *testing.T) {
 	// Insert synthetic fixtures into disposable database
 	var facID string
 	err := pool.QueryRow(ctx, `
-		INSERT INTO giki_sports.facilities (slug, name, description, location, status)
-		VALUES ('http-test-facility', 'HTTP Test Arena', 'Synthetic description', 'North Hall', 'active')
+		INSERT INTO giki_sports.facilities (slug, name, description, status)
+		VALUES ('http-test-facility', 'HTTP Test Arena', 'Synthetic description', 'active')
 		RETURNING id;
 	`).Scan(&facID)
 	if err != nil {
@@ -259,8 +259,8 @@ func TestFacilityScheduleUpdateHTTP_Integration(t *testing.T) {
 	// 4. Seed test facility and two initial schedules
 	var facID, sched1ID, sched2ID uuid.UUID
 	err = pool.QueryRow(ctx, `
-		INSERT INTO giki_sports.facilities (slug, name, description, location, status)
-		VALUES ('badminton-hall', 'Badminton Hall', 'Primary badminton hall', 'Sports Complex Level 1', 'active')
+		INSERT INTO giki_sports.facilities (slug, name, description, status)
+		VALUES ('badminton-hall', 'Badminton Hall', 'Primary badminton hall', 'active')
 		RETURNING id;
 	`).Scan(&facID)
 	if err != nil {
@@ -760,8 +760,8 @@ func TestFacilityScheduleDeleteHTTP_Integration(t *testing.T) {
 	// 4. Seed test facility and 3 schedule windows
 	var facID, sched1ID, sched2ID, sched3ID uuid.UUID
 	err = pool.QueryRow(ctx, `
-		INSERT INTO giki_sports.facilities (slug, name, description, location, status)
-		VALUES ('del-arena', 'Delete Arena Hall', 'Facility for delete verification', 'East Wing', 'active')
+		INSERT INTO giki_sports.facilities (slug, name, description, status)
+		VALUES ('del-arena', 'Delete Arena Hall', 'Facility for delete verification', 'active')
 		RETURNING id;
 	`).Scan(&facID)
 	if err != nil {
@@ -1270,8 +1270,8 @@ func TestFacilityScheduleCreateHTTP_Integration(t *testing.T) {
 	// 4. Seed test facility with an empty timetable
 	var facID uuid.UUID
 	err = pool.QueryRow(ctx, `
-		INSERT INTO giki_sports.facilities (slug, name, description, location, status)
-		VALUES ('create-arena', 'Create Arena', 'Arena for schedule creation testing', 'West Wing', 'active')
+		INSERT INTO giki_sports.facilities (slug, name, description, status)
+		VALUES ('create-arena', 'Create Arena', 'Arena for schedule creation testing', 'active')
 		RETURNING id;
 	`).Scan(&facID)
 	if err != nil {

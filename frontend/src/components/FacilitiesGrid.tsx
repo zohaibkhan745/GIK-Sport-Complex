@@ -1,11 +1,16 @@
+import { useState } from "react";
+import { Plus } from "lucide-react";
 import type { Facility } from "../types";
 import { FacilityCard } from "./FacilityCard";
+import { CreateFacilityModal } from "./CreateFacilityModal";
+import { useAuth } from "../context/AuthContext";
 
 interface FacilitiesGridProps {
   facilities: Facility[];
   isLoading: boolean;
   error: string | null;
   onRetry: () => void;
+  onFacilityCreated?: (facility: Facility) => void;
 }
 
 export function FacilitiesGrid({
@@ -13,18 +18,48 @@ export function FacilitiesGrid({
   isLoading,
   error,
   onRetry,
+  onFacilityCreated,
 }: FacilitiesGridProps) {
+  const { user } = useAuth();
+  const canAddFacility = Boolean(
+    user &&
+      (user.roles.includes("sports_director") ||
+        user.roles.includes("super_admin"))
+  );
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  const handleCreated = (newFacility: Facility) => {
+    if (onFacilityCreated) {
+      onFacilityCreated(newFacility);
+    }
+  };
+
   return (
     <section id="facilities" aria-label="Campus Sports Facilities Directory">
       {/* Directory Title */}
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-bold text-[var(--color-navy)]">
-          Facilities
-        </h2>
-        {!isLoading && !error && (
-          <span className="text-xs text-[var(--color-navy-soft)]">
-            {facilities.length} {facilities.length === 1 ? "facility" : "facilities"}
-          </span>
+        <div className="flex items-center gap-3">
+          <h2 className="font-display text-lg font-bold text-[var(--color-navy)]">
+            Facilities
+          </h2>
+          {!isLoading && !error && (
+            <span className="text-xs text-[var(--color-navy-soft)]">
+              {facilities.length} {facilities.length === 1 ? "facility" : "facilities"}
+            </span>
+          )}
+        </div>
+
+        {canAddFacility && !isLoading && !error && (
+          <button
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            data-testid="add-facility-btn"
+            aria-label="Add new sports facility"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-maroon)] px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
+          >
+            <Plus size={14} />
+            <span>Add Facility</span>
+          </button>
         )}
       </div>
 
@@ -69,6 +104,16 @@ export function FacilitiesGrid({
           <p className="mt-1 text-xs">
             There are currently no sports facilities listed in the database.
           </p>
+          {canAddFacility && (
+            <button
+              type="button"
+              onClick={() => setIsCreateModalOpen(true)}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-maroon)] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Add First Facility</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -82,6 +127,15 @@ export function FacilitiesGrid({
             <FacilityCard key={f.slug} facility={f} />
           ))}
         </div>
+      )}
+
+      {/* Create Facility Modal */}
+      {canAddFacility && (
+        <CreateFacilityModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onCreated={handleCreated}
+        />
       )}
     </section>
   );

@@ -3,6 +3,8 @@ package facility
 import (
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,6 +12,12 @@ import (
 
 // ErrNotFound is a sentinel error returned when a requested facility does not exist.
 var ErrNotFound = errors.New("facility not found")
+
+// ErrDuplicateFacility is a sentinel error returned when a facility slug or name collides with an existing facility.
+var ErrDuplicateFacility = errors.New("facility already exists")
+
+// ErrFacilityValidation is a sentinel error returned when facility creation or update parameters fail validation.
+var ErrFacilityValidation = errors.New("invalid facility input")
 
 // NotFoundError provides structured error context for an unresolvable facility slug.
 type NotFoundError struct {
@@ -24,6 +32,33 @@ func (e *NotFoundError) Is(target error) bool {
 	return target == ErrNotFound
 }
 
+// DuplicateFacilityError provides structured error context when a facility creation collides with an existing facility.
+type DuplicateFacilityError struct {
+	Field string
+	Value string
+}
+
+func (e *DuplicateFacilityError) Error() string {
+	return fmt.Sprintf("facility with %s %q already exists", e.Field, e.Value)
+}
+
+func (e *DuplicateFacilityError) Is(target error) bool {
+	return target == ErrDuplicateFacility
+}
+
+// FacilityValidationError provides structured error context for invalid facility parameters.
+type FacilityValidationError struct {
+	Message string
+}
+
+func (e *FacilityValidationError) Error() string {
+	return fmt.Sprintf("invalid facility: %s", e.Message)
+}
+
+func (e *FacilityValidationError) Is(target error) bool {
+	return target == ErrFacilityValidation || target == ErrInvalidInput
+}
+
 // OperationalStatus represents the current availability state of a facility.
 type OperationalStatus string
 
@@ -31,7 +66,207 @@ const (
 	StatusActive      OperationalStatus = "active"
 	StatusMaintenance OperationalStatus = "maintenance"
 	StatusClosed      OperationalStatus = "closed"
+	StatusReserved    OperationalStatus = "reserved"
 )
+
+// IsValidStatus returns true if the status is one of the supported operational statuses.
+func IsValidStatus(status OperationalStatus) bool {
+	return status == StatusActive || status == StatusMaintenance || status == StatusClosed || status == StatusReserved
+}
+
+var slugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+
+// Slugify converts an arbitrary string into a URL-friendly slug.
+func Slugify(s string) string {
+	s = strings.TrimSpace(strings.ToLower(s))
+	var b strings.Builder
+	b.Grow(len(s))
+	lastWasHyphen := false
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastWasHyphen = false
+		} else if r == ' ' || r == '-' || r == '_' || r == '/' {
+			if !lastWasHyphen && b.Len() > 0 {
+				b.WriteRune('-')
+				lastWasHyphen = true
+			}
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+// CreateFacilityInput defines the parameters for creating a new facility.
+type CreateFacilityInput struct {
+	Name        string            `json:"name"`
+	Slug        string            `json:"slug"`
+	Description *string           `json:"description,omitempty"`
+	Status      OperationalStatus `json:"status"`
+	StatusUntil *time.Time        `json:"statusUntil,omitempty"`
+	StatusNote  *string           `json:"statusNote,omitempty"`
+	ReservedFor *string           `json:"reservedFor,omitempty"`
+}
+
+// Validate verifies that the proposed facility parameters conform to business and database constraints.
+func (in *CreateFacilityInput) Validate() error {
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" {
+		return &FacilityValidationError{Message: "name is required and cannot be empty"}
+	}
+	if len(in.Name) > 255 {
+		return &FacilityValidationError{Message: "name cannot exceed 255 characters"}
+	}
+
+	in.Slug = strings.TrimSpace(strings.ToLower(in.Slug))
+	if in.Slug == "" {
+		in.Slug = Slugify(in.Name)
+	}
+	if in.Slug == "" {
+		return &FacilityValidationError{Message: "slug could not be generated from name; please provide a valid slug"}
+	}
+	if len(in.Slug) > 100 {
+		return &FacilityValidationError{Message: "slug cannot exceed 100 characters"}
+	}
+	if !slugPattern.MatchString(in.Slug) {
+		return &FacilityValidationError{Message: "slug must contain only lowercase alphanumeric characters separated by single hyphens"}
+	}
+
+	if in.Status == "" {
+		in.Status = StatusActive
+	} else if !IsValidStatus(in.Status) {
+		return &FacilityValidationError{Message: fmt.Sprintf("invalid status %q; must be 'active', 'maintenance', 'closed', or 'reserved'", in.Status)}
+	}
+
+	if in.Description != nil {
+		trimmed := strings.TrimSpace(*in.Description)
+		if len(trimmed) > 2000 {
+			return &FacilityValidationError{Message: "description cannot exceed 2000 characters"}
+		}
+		if trimmed == "" {
+			in.Description = nil
+		} else {
+			in.Description = &trimmed
+		}
+	}
+
+	if in.StatusNote != nil {
+		trimmed := strings.TrimSpace(*in.StatusNote)
+		if len(trimmed) > 1000 {
+			return &FacilityValidationError{Message: "status note cannot exceed 1000 characters"}
+		}
+		if trimmed == "" {
+			in.StatusNote = nil
+		} else {
+			in.StatusNote = &trimmed
+		}
+	}
+
+	if in.ReservedFor != nil {
+		trimmed := strings.TrimSpace(*in.ReservedFor)
+		if len(trimmed) > 255 {
+			return &FacilityValidationError{Message: "reserved for cannot exceed 255 characters"}
+		}
+		if trimmed == "" {
+			in.ReservedFor = nil
+		} else {
+			in.ReservedFor = &trimmed
+		}
+	}
+
+	return nil
+}
+
+// UpdateFacilityInput defines the modifiable parameters of an existing facility.
+type UpdateFacilityInput struct {
+	Name             *string            `json:"name,omitempty"`
+	Description      *string            `json:"description,omitempty"`
+	Status           *OperationalStatus `json:"status,omitempty"`
+	StatusUntil      *time.Time         `json:"statusUntil,omitempty"`
+	ClearStatusUntil bool               `json:"clearStatusUntil,omitempty"`
+	StatusNote       *string            `json:"statusNote,omitempty"`
+	ClearStatusNote  bool               `json:"clearStatusNote,omitempty"`
+	ReservedFor      *string            `json:"reservedFor,omitempty"`
+	ClearReservedFor bool               `json:"clearReservedFor,omitempty"`
+}
+
+// Validate verifies that the proposed facility updates conform to business and database constraints.
+func (in *UpdateFacilityInput) Validate() error {
+	hasUpdate := false
+
+	if in.Name != nil {
+		trimmed := strings.TrimSpace(*in.Name)
+		if trimmed == "" {
+			return &FacilityValidationError{Message: "name cannot be empty"}
+		}
+		if len(trimmed) > 255 {
+			return &FacilityValidationError{Message: "name cannot exceed 255 characters"}
+		}
+		in.Name = &trimmed
+		hasUpdate = true
+	}
+
+	if in.Status != nil {
+		if !IsValidStatus(*in.Status) {
+			return &FacilityValidationError{Message: fmt.Sprintf("invalid status %q; must be 'active', 'maintenance', 'closed', or 'reserved'", *in.Status)}
+		}
+		hasUpdate = true
+	}
+
+	if in.Description != nil {
+		trimmed := strings.TrimSpace(*in.Description)
+		if len(trimmed) > 2000 {
+			return &FacilityValidationError{Message: "description cannot exceed 2000 characters"}
+		}
+		if trimmed == "" {
+			in.Description = nil
+		} else {
+			in.Description = &trimmed
+		}
+		hasUpdate = true
+	}
+
+	if in.StatusUntil != nil || in.ClearStatusUntil {
+		hasUpdate = true
+	}
+
+	if in.StatusNote != nil {
+		trimmed := strings.TrimSpace(*in.StatusNote)
+		if len(trimmed) > 1000 {
+			return &FacilityValidationError{Message: "status note cannot exceed 1000 characters"}
+		}
+		if trimmed == "" {
+			in.StatusNote = nil
+			in.ClearStatusNote = true
+		} else {
+			in.StatusNote = &trimmed
+		}
+		hasUpdate = true
+	} else if in.ClearStatusNote {
+		hasUpdate = true
+	}
+
+	if in.ReservedFor != nil {
+		trimmed := strings.TrimSpace(*in.ReservedFor)
+		if len(trimmed) > 255 {
+			return &FacilityValidationError{Message: "reserved for cannot exceed 255 characters"}
+		}
+		if trimmed == "" {
+			in.ReservedFor = nil
+			in.ClearReservedFor = true
+		} else {
+			in.ReservedFor = &trimmed
+		}
+		hasUpdate = true
+	} else if in.ClearReservedFor {
+		hasUpdate = true
+	}
+
+	if !hasUpdate {
+		return &FacilityValidationError{Message: "at least one field (name, status, description, statusUntil, statusNote, or reservedFor) must be provided"}
+	}
+
+	return nil
+}
 
 // Facility is the domain read model for a sports complex facility.
 // It matches the relational schema in giki_sports.facilities.
@@ -40,11 +275,22 @@ type Facility struct {
 	Slug        string            `json:"slug"`
 	Name        string            `json:"name"`
 	Description *string           `json:"description,omitempty"`
-	Location    *string           `json:"location,omitempty"`
 	Status      OperationalStatus `json:"status"`
+	StatusUntil *time.Time        `json:"statusUntil,omitempty"`
+	StatusNote  *string           `json:"statusNote,omitempty"`
+	ReservedFor *string           `json:"reservedFor,omitempty"`
 	CreatedAt   time.Time         `json:"createdAt"`
 	UpdatedAt   time.Time         `json:"updatedAt"`
 	Schedules   []Schedule        `json:"schedules"`
+}
+
+// EffectiveStatus resolves the operational status, auto-reverting non-active statuses
+// to StatusActive when statusUntil has elapsed.
+func (f *Facility) EffectiveStatus() OperationalStatus {
+	if f.Status != StatusActive && f.StatusUntil != nil && !time.Now().Before(*f.StatusUntil) {
+		return StatusActive
+	}
+	return f.Status
 }
 
 // Schedule is the domain read model for a recurring weekly operating window.
@@ -117,13 +363,26 @@ func (e *DuplicateScheduleError) Is(target error) bool {
 	return target == ErrDuplicateSchedule
 }
 
-// SupportedAudiences defines the allowable audience values as enforced by schema constraint chk_schedules_audience_valid.
+// SupportedAudiences defines the allowable audience values for campus cohorts and GIKI varsity teams.
 var SupportedAudiences = map[string]struct{}{
-	"general":    {},
-	"student":    {},
-	"faculty":    {},
-	"women_only": {},
-	"staff":      {},
+	// Campus Cohorts
+	"general":           {},
+	"student":           {},
+	"faculty":           {},
+	"women_only":        {},
+	"staff":             {},
+	// GIKI Sports Teams & Dedicated Cohorts
+	"badminton_team":    {},
+	"basketball_boys":   {},
+	"basketball_girls":  {},
+	"volleyball_boys":   {},
+	"volleyball_girls":  {},
+	"cricket_team":      {},
+	"football_team":     {},
+	"tennis_team":       {},
+	"squash_team":       {},
+	"squash_faculty":    {},
+	"table_tennis_team": {},
 }
 
 // UpdateScheduleInput defines the modifiable properties of a weekly operating schedule window.

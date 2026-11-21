@@ -22,14 +22,16 @@ import (
 )
 
 type fakeReader struct {
-	facilities          []facility.Facility
-	listErr             error
-	getBySlugFunc       func(ctx context.Context, slug string) (*facility.Facility, error)
-	updateWithAuditFunc func(ctx context.Context, facilitySlug string, scheduleID uuid.UUID, input facility.UpdateScheduleInput, audit facility.AuditParams) (*facility.Schedule, error)
-	deleteWithAuditFunc func(ctx context.Context, facilitySlug string, scheduleID uuid.UUID, audit facility.AuditParams) error
-	createWithAuditFunc func(ctx context.Context, facilitySlug string, input facility.CreateScheduleInput, audit facility.AuditParams) (*facility.Schedule, error)
-	hasDeadline         bool
-	observedDeadline    time.Time
+	facilities                  []facility.Facility
+	listErr                     error
+	getBySlugFunc               func(ctx context.Context, slug string) (*facility.Facility, error)
+	updateWithAuditFunc         func(ctx context.Context, facilitySlug string, scheduleID uuid.UUID, input facility.UpdateScheduleInput, audit facility.AuditParams) (*facility.Schedule, error)
+	deleteWithAuditFunc         func(ctx context.Context, facilitySlug string, scheduleID uuid.UUID, audit facility.AuditParams) error
+	createWithAuditFunc         func(ctx context.Context, facilitySlug string, input facility.CreateScheduleInput, audit facility.AuditParams) (*facility.Schedule, error)
+	createFacilityWithAuditFunc func(ctx context.Context, input facility.CreateFacilityInput, audit facility.AuditParams) (*facility.Facility, error)
+	updateFacilityWithAuditFunc func(ctx context.Context, slug string, input facility.UpdateFacilityInput, audit facility.AuditParams) (*facility.Facility, error)
+	hasDeadline                 bool
+	observedDeadline            time.Time
 }
 
 func (f *fakeReader) List(ctx context.Context) ([]facility.Facility, error) {
@@ -91,6 +93,30 @@ func (f *fakeReader) CreateScheduleWithAudit(ctx context.Context, facilitySlug s
 	return nil, errors.New("not implemented in fakeReader")
 }
 
+func (f *fakeReader) CreateFacilityWithAudit(ctx context.Context, input facility.CreateFacilityInput, audit facility.AuditParams) (*facility.Facility, error) {
+	dl, ok := ctx.Deadline()
+	f.hasDeadline = ok
+	f.observedDeadline = dl
+	if f.createFacilityWithAuditFunc != nil {
+		return f.createFacilityWithAuditFunc(ctx, input, audit)
+	}
+	return nil, errors.New("not implemented in fakeReader")
+}
+
+func (f *fakeReader) UpdateFacilityWithAudit(ctx context.Context, slug string, input facility.UpdateFacilityInput, audit facility.AuditParams) (*facility.Facility, error) {
+	dl, ok := ctx.Deadline()
+	f.hasDeadline = ok
+	f.observedDeadline = dl
+	if f.updateFacilityWithAuditFunc != nil {
+		return f.updateFacilityWithAuditFunc(ctx, slug, input, audit)
+	}
+	return nil, errors.New("not implemented in fakeReader")
+}
+
+func (f *fakeReader) UpdateDescription(ctx context.Context, slug string, description *string) (*facility.Facility, error) {
+	return nil, errors.New("not implemented in fakeReader")
+}
+
 func strPtr(s string) *string {
 	return &s
 }
@@ -119,6 +145,8 @@ func setupUpdateTestApp(fake *fakeReader, timeout time.Duration, principal *auth
 	h.RegisterScheduleUpdateRoute(api)
 	h.RegisterScheduleDeleteRoute(api)
 	h.RegisterScheduleCreateRoute(api)
+	h.RegisterFacilityCreateRoute(api)
+	h.RegisterFacilityUpdateRoute(api)
 	return app
 }
 
@@ -146,7 +174,6 @@ func TestHandler_List_Success(t *testing.T) {
 				Slug:        "demo-badminton-court",
 				Name:        "[Demo] Campus Badminton Court",
 				Description: strPtr("Synthetic court"),
-				Location:    strPtr("Wing B"),
 				Status:      facility.StatusActive,
 				Schedules: []facility.Schedule{
 					{
@@ -186,7 +213,7 @@ func TestHandler_List_Success(t *testing.T) {
 
 	f := list[0]
 	// Verify exact camelCase field names
-	expectedKeys := []string{"id", "slug", "name", "description", "location", "status", "schedules"}
+	expectedKeys := []string{"id", "slug", "name", "description", "status", "schedules"}
 	for _, k := range expectedKeys {
 		if _, ok := f[k]; !ok {
 			t.Errorf("missing expected JSON property %q in facility response: %s", k, string(body))
@@ -246,7 +273,6 @@ func TestHandler_GetBySlug_Success(t *testing.T) {
 				Slug:        "demo-badminton-court",
 				Name:        "[Demo] Campus Badminton Court",
 				Description: strPtr("Synthetic court"),
-				Location:    strPtr("Wing B"),
 				Status:      facility.StatusActive,
 				Schedules: []facility.Schedule{
 					{
@@ -331,7 +357,6 @@ func TestHandler_GetBySlug_NullableFields(t *testing.T) {
 				Slug:        "null-fields-fac",
 				Name:        "Null Fields Facility",
 				Description: nil,
-				Location:    nil,
 				Status:      facility.StatusClosed,
 			},
 		},
@@ -353,9 +378,6 @@ func TestHandler_GetBySlug_NullableFields(t *testing.T) {
 
 	if raw["description"] != nil {
 		t.Errorf("expected description to be JSON null, got %v", raw["description"])
-	}
-	if raw["location"] != nil {
-		t.Errorf("expected location to be JSON null, got %v", raw["location"])
 	}
 }
 
@@ -1315,5 +1337,292 @@ func TestHandler_CreateSchedule_ContextIsBounded(t *testing.T) {
 	}
 	if time.Until(fake.observedDeadline) > 3*time.Second {
 		t.Errorf("observed deadline exceeds configured timeout: %v", fake.observedDeadline)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for Handler.CreateFacility (POST /api/facilities)
+// ---------------------------------------------------------------------------
+
+func TestHandler_CreateFacility_Unauthenticated(t *testing.T) {
+	fake := &fakeReader{}
+	app := setupUpdateTestApp(fake, 5*time.Second, nil) // no principal
+
+	body := `{"name": "Squash Arena"}`
+	req := httptest.NewRequest("POST", "/api/facilities", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Errorf("expected 401 Unauthorized, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandler_CreateFacility_UnsupportedMediaType(t *testing.T) {
+	principal := samplePrincipal(user.RoleSportsDirector)
+	fake := &fakeReader{}
+	app := setupUpdateTestApp(fake, 5*time.Second, principal)
+
+	req := httptest.NewRequest("POST", "/api/facilities", strings.NewReader("name=Squash+Arena"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusUnsupportedMediaType {
+		t.Errorf("expected 415 Unsupported Media Type, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandler_CreateFacility_EmptyBody(t *testing.T) {
+	principal := samplePrincipal(user.RoleSportsDirector)
+	fake := &fakeReader{}
+	app := setupUpdateTestApp(fake, 5*time.Second, principal)
+
+	req := httptest.NewRequest("POST", "/api/facilities", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandler_CreateFacility_DisallowsUnknownFields(t *testing.T) {
+	principal := samplePrincipal(user.RoleSportsDirector)
+	fake := &fakeReader{}
+	app := setupUpdateTestApp(fake, 5*time.Second, principal)
+
+	body := `{"name": "Squash Arena", "unexpected": "field"}`
+	req := httptest.NewRequest("POST", "/api/facilities", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request for unknown fields, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandler_CreateFacility_Validation_EmptyName(t *testing.T) {
+	principal := samplePrincipal(user.RoleSportsDirector)
+	fake := &fakeReader{}
+	app := setupUpdateTestApp(fake, 5*time.Second, principal)
+
+	body := `{"name": "   "}`
+	req := httptest.NewRequest("POST", "/api/facilities", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request for empty name, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandler_CreateFacility_Conflict(t *testing.T) {
+	principal := samplePrincipal(user.RoleSportsDirector)
+	fake := &fakeReader{
+		createFacilityWithAuditFunc: func(ctx context.Context, input facility.CreateFacilityInput, audit facility.AuditParams) (*facility.Facility, error) {
+			return nil, &facility.DuplicateFacilityError{Field: "slug", Value: "squash-arena"}
+		},
+	}
+	app := setupUpdateTestApp(fake, 5*time.Second, principal)
+
+	body := `{"name": "Squash Arena"}`
+	req := httptest.NewRequest("POST", "/api/facilities", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Errorf("expected 409 Conflict, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandler_CreateFacility_Success(t *testing.T) {
+	principal := samplePrincipal(user.RoleSportsDirector)
+	facID := uuid.New()
+	fake := &fakeReader{
+		createFacilityWithAuditFunc: func(ctx context.Context, input facility.CreateFacilityInput, audit facility.AuditParams) (*facility.Facility, error) {
+			if audit.ActorID != principal.User.ID {
+				t.Errorf("expected ActorID %s, got %s", principal.User.ID, audit.ActorID)
+			}
+			if input.Slug != "squash-arena" {
+				t.Errorf("expected auto-generated slug 'squash-arena', got %q", input.Slug)
+			}
+			return &facility.Facility{
+				ID:        facID,
+				Slug:      input.Slug,
+				Name:      input.Name,
+				Status:    input.Status,
+				Schedules: []facility.Schedule{},
+			}, nil
+		},
+	}
+	app := setupUpdateTestApp(fake, 5*time.Second, principal)
+
+	body := `{"name": "Squash Arena", "status": "active"}`
+	req := httptest.NewRequest("POST", "/api/facilities", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Errorf("expected 201 Created, got %d", resp.StatusCode)
+	}
+
+	var res facility.FacilityResponse
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if res.ID != facID.String() || res.Slug != "squash-arena" || res.Name != "Squash Arena" {
+		t.Errorf("unexpected facility response: %+v", res)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for Handler.UpdateFacility (PATCH /api/facilities/:slug)
+// ---------------------------------------------------------------------------
+
+func TestHandler_UpdateFacility_Unauthenticated(t *testing.T) {
+	fake := &fakeReader{}
+	app := setupUpdateTestApp(fake, 5*time.Second, nil)
+
+	body := `{"name": "Renamed Arena"}`
+	req := httptest.NewRequest("PATCH", "/api/facilities/gymnasium", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Errorf("expected 401 Unauthorized, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandler_UpdateFacility_NotFound(t *testing.T) {
+	principal := samplePrincipal(user.RoleSportsDirector)
+	fake := &fakeReader{
+		updateFacilityWithAuditFunc: func(ctx context.Context, slug string, input facility.UpdateFacilityInput, audit facility.AuditParams) (*facility.Facility, error) {
+			return nil, facility.ErrNotFound
+		},
+	}
+	app := setupUpdateTestApp(fake, 5*time.Second, principal)
+
+	body := `{"name": "Renamed Arena"}`
+	req := httptest.NewRequest("PATCH", "/api/facilities/nonexistent", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Errorf("expected 404 Not Found, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandler_UpdateFacility_NoFields(t *testing.T) {
+	principal := samplePrincipal(user.RoleSportsDirector)
+	fake := &fakeReader{}
+	app := setupUpdateTestApp(fake, 5*time.Second, principal)
+
+	body := `{}`
+	req := httptest.NewRequest("PATCH", "/api/facilities/gymnasium", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request for empty update, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandler_UpdateFacility_Success(t *testing.T) {
+	principal := samplePrincipal(user.RoleSportsDirector)
+	facID := uuid.New()
+	desc := "Updated facility description for campus athletes"
+	fake := &fakeReader{
+		updateFacilityWithAuditFunc: func(ctx context.Context, slug string, input facility.UpdateFacilityInput, audit facility.AuditParams) (*facility.Facility, error) {
+			if slug != "gymnasium" {
+				t.Errorf("expected slug 'gymnasium', got %q", slug)
+			}
+			if input.Name == nil || *input.Name != "Main Gymnasium" {
+				t.Errorf("unexpected name update: %v", input.Name)
+			}
+			if input.Status == nil || *input.Status != facility.StatusMaintenance {
+				t.Errorf("unexpected status update: %v", input.Status)
+			}
+			return &facility.Facility{
+				ID:          facID,
+				Slug:        slug,
+				Name:        *input.Name,
+				Description: input.Description,
+				Status:      *input.Status,
+				Schedules:   []facility.Schedule{},
+			}, nil
+		},
+	}
+	app := setupUpdateTestApp(fake, 5*time.Second, principal)
+
+	body := `{"name": "Main Gymnasium", "status": "maintenance", "description": "Updated facility description for campus athletes"}`
+	req := httptest.NewRequest("PATCH", "/api/facilities/gymnasium", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("expected 200 OK, got %d", resp.StatusCode)
+	}
+
+	var res facility.FacilityResponse
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if res.Name != "Main Gymnasium" || res.Status != "maintenance" || *res.Description != desc {
+		t.Errorf("unexpected facility response: %+v", res)
 	}
 }

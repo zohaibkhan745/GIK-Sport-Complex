@@ -2,7 +2,7 @@
   "facilities": [
     {
       "id": "padel-court-1",
-      "name": "GIKI Glass Padel Court 1",
+      "name": "Padel Court 1",
       "category": "Racquet",
       "description": "State-of-the-art panoramic tempered glass court with high-grade synthetic turf and anti-glare LED tournament lighting.",
       "location": "Sports Complex, Outdoor Courts North",
@@ -40,7 +40,7 @@
     },
     {
       "id": "padel-court-2",
-      "name": "GIKI Glass Padel Court 2",
+      "name": "Padel Court 2",
       "category": "Racquet",
       "description": "Tournament standard court configured for doubles \u0026 singles match play with spectator seating deck.",
       "location": "Sports Complex, Outdoor Courts North",
@@ -76,7 +76,7 @@
     },
     {
       "id": "badminton-indoor",
-      "name": "Indoor Badminton Championship Hall",
+      "name": "Badminton",
       "category": "Indoor",
       "description": "Four BWF-certified teakwood sprung courts with shock absorption, climate cooling, and spectator gallery.",
       "location": "Indoor Sports Hall, Level 1",
@@ -113,7 +113,7 @@
     },
     {
       "id": "squash-courts",
-      "name": "Glass-Back Squash Complex (Courts 1-3)",
+      "name": "Squash",
       "category": "Racquet",
       "description": "Three glass-back competition squash courts with Junckers Beech flooring and electronic scoring monitors.",
       "location": "Sports Complex, West Wing Ground Floor",
@@ -149,7 +149,7 @@
     },
     {
       "id": "tennis-synthetic",
-      "name": "Hard Tennis Courts (Courts 1 \u0026 2)",
+      "name": "Tennis",
       "category": "Outdoor",
       "description": "Two US Open-grade acrylic cushioned hard courts with high-mast LED night lighting.",
       "location": "Campus South Perimeter Sports Ground",
@@ -185,7 +185,7 @@
     },
     {
       "id": "futsal-court",
-      "name": "GIKI Floodlit Futsal Court",
+      "name": "Futsal",
       "category": "Outdoor",
       "description": "FIFA Quality certified artificial turf pitch with side rebound netting and digital score display.",
       "location": "Sports Complex Central Courtyard",
@@ -222,7 +222,7 @@
     },
     {
       "id": "table-tennis",
-      "name": "Table Tennis Hall (6 Tables)",
+      "name": "Table Tennis",
       "category": "Indoor",
       "description": "Equipped with 6 ITTF approved Butterfly Centrefold 25 tournament tables with tournament lighting.",
       "location": "Indoor Complex, Mezzanine Hall",
@@ -257,7 +257,7 @@
     },
     {
       "id": "gymnasium",
-      "name": "GIKI Central Fitness \u0026 Strength Gym",
+      "name": "Gymnasium",
       "category": "Fitness",
       "description": "Comprehensive weightlifting zone, Olympic squat racks, cardiovascular treadmills, ellipticals, and functional trainer rigs.",
       "location": "Sports Complex, Ground Floor East",
@@ -295,7 +295,7 @@
     },
     {
       "id": "swimming-pool",
-      "name": "GIKI Semi-Olympic Swimming Pool",
+      "name": "Swimming Pool",
       "category": "Aquatics",
       "description": "25-meter 6-lane temperature-controlled pool with ozone filtration and certified lifeguards on duty.",
       "location": "Aquatic Center, Sports Complex",
@@ -336,7 +336,7 @@
     {
       "id": "BK-10492",
       "facilityId": "padel-court-1",
-      "facilityName": "GIKI Glass Padel Court 1",
+      "facilityName": "Padel Court 1",
       "date": "2026-09-26",
       "timeSlot": "18:00 - 19:00",
       "bookerType": "student",
@@ -355,7 +355,7 @@
     {
       "id": "BK-10493",
       "facilityId": "padel-court-1",
-      "facilityName": "GIKI Glass Padel Court 1",
+      "facilityName": "Padel Court 1",
       "date": "2026-09-26",
       "timeSlot": "19:00 - 20:00",
       "bookerType": "faculty",
@@ -371,7 +371,7 @@
     {
       "id": "BK-10494",
       "facilityId": "badminton-indoor",
-      "facilityName": "Indoor Badminton Championship Hall",
+      "facilityName": "Badminton",
       "date": "2026-09-26",
       "timeSlot": "17:00 - 18:00",
       "bookerType": "student",
@@ -389,7 +389,7 @@
     {
       "id": "BK-10495",
       "facilityId": "squash-courts",
-      "facilityName": "Glass-Back Squash Complex (Courts 1-3)",
+      "facilityName": "Squash",
       "date": "2026-09-27",
       "timeSlot": "18:00 - 19:00",
       "bookerType": "student",

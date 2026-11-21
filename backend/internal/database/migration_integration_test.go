@@ -300,6 +300,61 @@ func getMigration1To7FixtureFS(t *testing.T) fs.FS {
 	}
 }
 
+// getMigration1To8FixtureFS creates an in-memory fs.FS containing migrations 00001 through 00008
+// so tests targeting migrations 1 through 8 remain completely isolated from subsequent migrations.
+func getMigration1To8FixtureFS(t *testing.T) fs.FS {
+	mig1Path := filepath.Join("..", "..", "migrations", "00001_create_giki_sports_schema.sql")
+	content1, err := os.ReadFile(mig1Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 1 file: %v", err)
+	}
+	mig2Path := filepath.Join("..", "..", "migrations", "00002_create_facilities_and_schedules.sql")
+	content2, err := os.ReadFile(mig2Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 2 file: %v", err)
+	}
+	mig3Path := filepath.Join("..", "..", "migrations", "00003_create_users_and_sessions.sql")
+	content3, err := os.ReadFile(mig3Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 3 file: %v", err)
+	}
+	mig4Path := filepath.Join("..", "..", "migrations", "00004_create_audit_logs.sql")
+	content4, err := os.ReadFile(mig4Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 4 file: %v", err)
+	}
+	mig5Path := filepath.Join("..", "..", "migrations", "00005_create_content_items.sql")
+	content5, err := os.ReadFile(mig5Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 5 file: %v", err)
+	}
+	mig6Path := filepath.Join("..", "..", "migrations", "00006_create_wallet_ledger.sql")
+	content6, err := os.ReadFile(mig6Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 6 file: %v", err)
+	}
+	mig7Path := filepath.Join("..", "..", "migrations", "00007_create_padel_booking_tables.sql")
+	content7, err := os.ReadFile(mig7Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 7 file: %v", err)
+	}
+	mig8Path := filepath.Join("..", "..", "migrations", "00008_create_gym_memberships_tables.sql")
+	content8, err := os.ReadFile(mig8Path)
+	if err != nil {
+		t.Fatalf("failed to read migration 8 file: %v", err)
+	}
+	return fstest.MapFS{
+		"00001_create_giki_sports_schema.sql":       &fstest.MapFile{Data: content1},
+		"00002_create_facilities_and_schedules.sql": &fstest.MapFile{Data: content2},
+		"00003_create_users_and_sessions.sql":       &fstest.MapFile{Data: content3},
+		"00004_create_audit_logs.sql":               &fstest.MapFile{Data: content4},
+		"00005_create_content_items.sql":            &fstest.MapFile{Data: content5},
+		"00006_create_wallet_ledger.sql":            &fstest.MapFile{Data: content6},
+		"00007_create_padel_booking_tables.sql":     &fstest.MapFile{Data: content7},
+		"00008_create_gym_memberships_tables.sql":   &fstest.MapFile{Data: content8},
+	}
+}
+
 // TestMigrationIntegration_DisposableDatabaseCycle tests migration 1's full lifecycle
 // (initial Up, repeating Up idempotency, version Status, Down reversal, and reapplying Up)
 // against an isolated disposable database using a dedicated migration 1 fixture.
@@ -756,8 +811,8 @@ func TestMigrationIntegration_FacilitiesAndSchedulesLifecycle(t *testing.T) {
 	// Step C: Insert valid facility and schedule
 	var facilityID string
 	err = testDB.QueryRowContext(ctx, `
-		INSERT INTO giki_sports.facilities (slug, name, description, location, status)
-		VALUES ('padel-court-1', 'GIKI Glass Padel Arena (Court 1)', 'Tournament glass court', 'Outdoor Arena North', 'active')
+		INSERT INTO giki_sports.facilities (slug, name, description, status)
+		VALUES ('padel-court-1', 'Padel Court 1', 'Tournament glass court', 'active')
 		RETURNING id;
 	`).Scan(&facilityID)
 	if err != nil {
@@ -2756,8 +2811,8 @@ func TestMigrationIntegration_GymMembershipLifecycle(t *testing.T) {
 		}
 	}()
 
-	migrationsDir := filepath.Join("..", "..", "migrations")
-	runner, err := NewMigrationRunnerFromDir(testDB, migrationsDir)
+	fixtureFS := getMigration1To8FixtureFS(t)
+	runner, err := NewMigrationRunner(testDB, fixtureFS)
 	if err != nil {
 		t.Fatalf("failed to initialize migration runner: %v", err)
 	}

@@ -1,5 +1,7 @@
 import {
   type Facility,
+  type CreateFacilityInput,
+  type UpdateFacilityInput,
   type Schedule,
   type UpdateScheduleInput,
   type CreateScheduleInput,
@@ -24,6 +26,8 @@ import {
   type PadelCancelResponse,
   type GymMembership,
   type GymMembershipSummary,
+  type GymMembershipPlan,
+  type UpdateGymMembershipPlanInput,
   parseFacilities,
   parseFacility,
   parseSchedule,
@@ -136,6 +140,40 @@ export const api = {
     return parseFacility(raw);
   },
 
+  createFacility: async (
+    input: CreateFacilityInput,
+    options?: RequestOptions
+  ): Promise<Facility> => {
+    const raw = await request<unknown>("/facilities", {
+      method: "POST",
+      body: JSON.stringify(input),
+      signal: options?.signal,
+    });
+    return parseFacility(raw);
+  },
+
+  updateFacility: async (
+    facilitySlug: string,
+    input: UpdateFacilityInput,
+    options?: RequestOptions
+  ): Promise<Facility> => {
+    const encodedSlug = encodeURIComponent(facilitySlug);
+    const raw = await request<unknown>(`/facilities/${encodedSlug}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+      signal: options?.signal,
+    });
+    return parseFacility(raw);
+  },
+
+  updateFacilityDescription: async (
+    facilitySlug: string,
+    description: string | null,
+    options?: RequestOptions
+  ): Promise<Facility> => {
+    return api.updateFacility(facilitySlug, { description }, options);
+  },
+
   updateSchedule: async (
     facilitySlug: string,
     scheduleId: string,
@@ -229,6 +267,34 @@ export const api = {
   },
 
   // -- Content Draft Operations (Step 10J) ----------------------------------
+  uploadContentImages: async (
+    files: File[],
+    options?: RequestOptions
+  ): Promise<string[]> => {
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append("images", file);
+    }
+    const res = await fetch("/api/admin/content/upload", {
+      method: "POST",
+      body: formData,
+      signal: options?.signal,
+      credentials: "include",
+    });
+    if (!res.ok) {
+      let msg = "Failed to upload image";
+      try {
+        const data = await res.json();
+        if (data && data.error) msg = data.error;
+      } catch {
+        // fallback
+      }
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    return Array.isArray(data.urls) ? data.urls : [];
+  },
+
   createDraft: async (
     input: CreateDraftInput,
     options?: RequestOptions
@@ -239,6 +305,7 @@ export const api = {
         kind: input.kind,
         title: input.title !== undefined ? input.title : null,
         content: input.content !== undefined ? input.content : null,
+        ...(input.imageUrls !== undefined ? { imageUrls: input.imageUrls } : {}),
       }),
       signal: options?.signal,
     });
@@ -267,6 +334,7 @@ export const api = {
       body: JSON.stringify({
         title: input.title !== undefined ? input.title : null,
         content: input.content !== undefined ? input.content : null,
+        ...(input.imageUrls !== undefined ? { imageUrls: input.imageUrls } : {}),
       }),
       signal: options?.signal,
     });
@@ -448,5 +516,22 @@ export const api = {
         signal: options?.signal,
       }
     );
+  },
+
+  getGymMembershipPlan: async (options?: RequestOptions): Promise<GymMembershipPlan> => {
+    return request<GymMembershipPlan>("/membership/plan", {
+      signal: options?.signal,
+    });
+  },
+
+  updateGymMembershipPlan: async (
+    input: UpdateGymMembershipPlanInput,
+    options?: RequestOptions
+  ): Promise<GymMembershipPlan> => {
+    return request<GymMembershipPlan>("/admin/membership/plan", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+      signal: options?.signal,
+    });
   },
 };

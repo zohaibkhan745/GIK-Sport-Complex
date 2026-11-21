@@ -126,33 +126,84 @@ export function AchievementsSection() {
 
       {/* Populated items */}
       {!isLoading && !error && items.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {items.map((item) => (
-            <article
-              key={item.id}
-              className="rounded-xl border border-[var(--color-border)] bg-white p-5 shadow-xs flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                    Achievement
-                  </span>
-                  <time
-                    dateTime={item.publishedAt}
-                    className="text-[11px] text-[var(--color-navy-soft)] font-medium"
-                  >
-                    {formatContentDate(item.publishedAt)}
-                  </time>
+        <div className="grid gap-5 sm:grid-cols-2">
+          {items.map((item) => {
+            const hasImages = Array.isArray(item.imageUrls) && item.imageUrls.length > 0;
+            return (
+              <article
+                key={item.id}
+                className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-white shadow-xs flex flex-col justify-between transition hover:shadow-md"
+              >
+                {/* Optional Image / Gallery Banner */}
+                {hasImages && (
+                  <div className="border-b border-[var(--color-border)] bg-neutral-100">
+                    {item.imageUrls!.length === 1 ? (
+                      <div className="overflow-hidden">
+                        <img
+                          src={item.imageUrls![0]}
+                          alt={item.title}
+                          className="h-48 w-full object-cover transition duration-300 hover:scale-105"
+                          loading="lazy"
+                          onError={(e) => {
+                            (e.currentTarget.parentElement as HTMLElement).style.display = "none";
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        className={`grid gap-1 overflow-hidden p-1 ${
+                          item.imageUrls!.length === 2
+                            ? "grid-cols-2"
+                            : "grid-cols-3"
+                        }`}
+                      >
+                        {item.imageUrls!.slice(0, 3).map((imgUrl, idx) => (
+                          <div key={idx} className="relative overflow-hidden rounded bg-neutral-200">
+                            <img
+                              src={imgUrl}
+                              alt={`${item.title} photo ${idx + 1}`}
+                              className="h-32 w-full object-cover transition duration-200 hover:scale-105"
+                              loading="lazy"
+                              onError={(e) => {
+                                (e.currentTarget.parentElement as HTMLElement).style.display = "none";
+                              }}
+                            />
+                            {idx === 2 && item.imageUrls!.length > 3 && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/60 font-semibold text-white text-xs">
+                                +{item.imageUrls!.length - 3} more
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="p-5 flex-1 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                        Achievement
+                      </span>
+                      <time
+                        dateTime={item.publishedAt}
+                        className="text-[11px] text-[var(--color-navy-soft)] font-medium"
+                      >
+                        {formatContentDate(item.publishedAt)}
+                      </time>
+                    </div>
+                    <h3 className="font-display font-semibold text-base text-[var(--color-navy)] leading-snug">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 text-xs leading-relaxed text-[var(--color-navy-soft)] whitespace-pre-line">
+                      {item.content}
+                    </p>
+                  </div>
                 </div>
-                <h3 className="font-display font-semibold text-base text-[var(--color-navy)] leading-snug">
-                  {item.title}
-                </h3>
-                <p className="mt-2 text-xs leading-relaxed text-[var(--color-navy-soft)] whitespace-pre-line">
-                  {item.content}
-                </p>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
     </section>

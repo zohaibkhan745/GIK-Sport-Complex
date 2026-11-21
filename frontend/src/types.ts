@@ -2,7 +2,7 @@
  * Domain types matching the PostgreSQL-backed REST API for GIKI Sports Complex.
  */
 
-export type OperationalStatus = "active" | "maintenance" | "closed";
+export type OperationalStatus = "active" | "maintenance" | "closed" | "reserved";
 
 /** One recurring weekly operating window for a facility. */
 export interface Schedule {
@@ -19,9 +19,32 @@ export interface Facility {
   slug: string;
   name: string;
   description: string | null;
-  location: string | null;
   status: OperationalStatus;
+  statusUntil?: string | null;
+  statusNote?: string | null;
+  reservedFor?: string | null;
   schedules: Schedule[];
+}
+
+/** Input payload for creating a new facility via POST /api/facilities. */
+export interface CreateFacilityInput {
+  name: string;
+  slug?: string;
+  description?: string | null;
+  status?: OperationalStatus;
+  statusUntil?: string | null;
+  statusNote?: string | null;
+  reservedFor?: string | null;
+}
+
+/** Input payload for updating facility attributes via PATCH /api/facilities/:slug. */
+export interface UpdateFacilityInput {
+  name?: string;
+  description?: string | null;
+  status?: OperationalStatus;
+  statusUntil?: string | null;
+  statusNote?: string | null;
+  reservedFor?: string | null;
 }
 
 /** Human-readable weekday mapping for ISO-8601 days (1..7). */
@@ -37,24 +60,60 @@ export const WEEKDAY_NAMES: Record<number, string> = {
 
 /** Human-readable audience labels. */
 export const AUDIENCE_LABELS: Record<string, string> = {
+  // Campus Cohorts
   student: "Students",
+  staff: "Staff",
   faculty: "Faculty",
   women_only: "Women Only",
   general: "General Community",
-  staff: "Staff",
+
+  // GIKI Sports Teams & Dedicated Cohorts
+  badminton_team: "GIK Badminton Team + Girls",
+  basketball_boys: "Basketball Boys (GIKI Team)",
+  basketball_girls: "Basketball Girls (GIKI Team)",
+  volleyball_boys: "Volleyball Boys",
+  volleyball_girls: "Volleyball Girls",
+  cricket_team: "Cricket GIKI Teams",
+  football_team: "GIKI Football Team",
+  tennis_team: "Lawn Tennis (GIKI Team)",
+  squash_team: "Squash (GIKI Team)",
+  squash_faculty: "Squash Faculty",
+  table_tennis_team: "Table Tennis (GIKI Team)",
 };
 
 /**
- * Format a 24-hour schedule time range without parsing through Date,
- * preserving "24:00:00" as end of day.
+ * Format an individual time string to 12-hour AM/PM format (e.g. "9:00 AM", "12:00 PM", "4:30 PM", "12:00 AM (Midnight)").
+ * Handles "24:00:00" or "24:00" gracefully as midnight end-of-day.
+ */
+export function formatClockTime(timeStr: string, isEndTime = false): string {
+  const trimmed = timeStr.trim();
+  if (trimmed.startsWith("24:00")) {
+    return isEndTime ? "12:00 AM (Midnight)" : "Midnight";
+  }
+  const parts = trimmed.split(":");
+  if (parts.length < 2) return timeStr;
+  let h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return timeStr;
+  if (h === 24) return isEndTime ? "12:00 AM (Midnight)" : "Midnight";
+  const period = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+  const minuteStr = m < 10 ? `0${m}` : `${m}`;
+  return `${h}:${minuteStr} ${period}`;
+}
+
+/**
+ * Format a schedule time range into a clean, human-friendly 12-hour AM/PM string,
+ * preserving "24:00:00" as "12:00 AM (Midnight)".
+ *
+ * Example:
+ *   formatTimeRange("09:00:00", "12:00:00") => "9:00 AM – 12:00 PM"
+ *   formatTimeRange("16:00:00", "18:00:00") => "4:00 PM – 6:00 PM"
+ *   formatTimeRange("22:00:00", "24:00:00") => "10:00 PM – 12:00 AM (Midnight)"
  */
 export function formatTimeRange(start: string, end: string): string {
-  const cleanStart = start.length >= 5 ? start.slice(0, 5) : start;
-  let cleanEnd = end.length >= 5 ? end.slice(0, 5) : end;
-  if (end.startsWith("24:00")) {
-    cleanEnd = "24:00 (Midnight)";
-  }
-  return `${cleanStart} – ${cleanEnd}`;
+  return `${formatClockTime(start, false)} – ${formatClockTime(end, true)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,8 +173,10 @@ export function isFacility(value: unknown): value is Facility {
     typeof f.name === "string" &&
     f.name.trim().length > 0 &&
     (f.description === null || typeof f.description === "string") &&
-    (f.location === null || typeof f.location === "string") &&
-    (f.status === "active" || f.status === "maintenance" || f.status === "closed") &&
+    (f.status === "active" || f.status === "maintenance" || f.status === "closed" || f.status === "reserved") &&
+    (f.statusUntil === undefined || f.statusUntil === null || typeof f.statusUntil === "string") &&
+    (f.statusNote === undefined || f.statusNote === null || typeof f.statusNote === "string") &&
+    (f.reservedFor === undefined || f.reservedFor === null || typeof f.reservedFor === "string") &&
     Array.isArray(f.schedules) &&
     f.schedules.every(isSchedule)
   );
@@ -322,6 +383,7 @@ export interface Draft {
   kind: ContentKind;
   title: string | null;
   content: string | null;
+  imageUrls?: string[];
   status: string;
   creatorId: string;
   createdAt: string;
@@ -333,11 +395,13 @@ export interface CreateDraftInput {
   kind: ContentKind;
   title?: string | null;
   content?: string | null;
+  imageUrls?: string[];
 }
 
 export interface UpdateDraftInput {
   title: string | null;
   content: string | null;
+  imageUrls?: string[];
 }
 
 export function isDraft(value: unknown): value is Draft {
@@ -349,6 +413,9 @@ export function isDraft(value: unknown): value is Draft {
     isContentKind(d.kind) &&
     (d.title === null || typeof d.title === "string") &&
     (d.content === null || typeof d.content === "string") &&
+    (d.imageUrls === undefined ||
+      (Array.isArray(d.imageUrls) &&
+        d.imageUrls.every((url: unknown) => typeof url === "string"))) &&
     typeof d.status === "string" &&
     typeof d.creatorId === "string" &&
     typeof d.createdAt === "string" &&
@@ -379,6 +446,7 @@ export interface PublicContentItem {
   kind: ContentKind;
   title: string;
   content: string;
+  imageUrls?: string[];
   publishedAt: string;
 }
 
@@ -391,6 +459,9 @@ export function isPublicContentItem(value: unknown): value is PublicContentItem 
     isContentKind(p.kind) &&
     typeof p.title === "string" &&
     typeof p.content === "string" &&
+    (p.imageUrls === undefined ||
+      (Array.isArray(p.imageUrls) &&
+        p.imageUrls.every((url: unknown) => typeof url === "string"))) &&
     typeof p.publishedAt === "string" &&
     p.publishedAt.trim().length > 0 &&
     !isNaN(Date.parse(p.publishedAt))
@@ -701,6 +772,23 @@ export interface GymMembershipSummary {
   daysRemaining: number;
   secondsRemaining: number;
   history: GymMembership[];
+}
+
+export interface GymMembershipPlan {
+  id: string;
+  planCode: string;
+  name: string;
+  durationDays: number;
+  pricePaisa: number;
+  isActive: boolean;
+  description?: string;
+}
+
+export interface UpdateGymMembershipPlanInput {
+  name?: string;
+  durationDays: number;
+  pricePaisa: number;
+  description?: string;
 }
 
 

@@ -161,8 +161,8 @@ func TestFacilityRepository_ListAndAssociations(t *testing.T) {
 	// Facility A: Padel Court (with 2 schedules)
 	var idA string
 	err := pool.QueryRow(ctx, `
-		INSERT INTO giki_sports.facilities (slug, name, description, location, status)
-		VALUES ('padel-court-1', 'Arena Padel Court', 'Glass padel court', 'Outdoor North', 'active')
+		INSERT INTO giki_sports.facilities (slug, name, description, status)
+		VALUES ('padel-court-1', 'Arena Padel Court', 'Glass padel court', 'active')
 		RETURNING id;
 	`).Scan(&idA)
 	if err != nil {
@@ -172,8 +172,8 @@ func TestFacilityRepository_ListAndAssociations(t *testing.T) {
 	// Facility B: Swimming Pool (with 0 schedules)
 	var idB string
 	err = pool.QueryRow(ctx, `
-		INSERT INTO giki_sports.facilities (slug, name, description, location, status)
-		VALUES ('olympic-pool', 'Campus Olympic Pool', NULL, NULL, 'maintenance')
+		INSERT INTO giki_sports.facilities (slug, name, description, status)
+		VALUES ('olympic-pool', 'Campus Olympic Pool', NULL, 'maintenance')
 		RETURNING id;
 	`).Scan(&idB)
 	if err != nil {
@@ -183,8 +183,8 @@ func TestFacilityRepository_ListAndAssociations(t *testing.T) {
 	// Facility C: Badminton Hall (with 3 schedules)
 	var idC string
 	err = pool.QueryRow(ctx, `
-		INSERT INTO giki_sports.facilities (slug, name, description, location, status)
-		VALUES ('badminton-hall', 'Main Badminton Championship Hall', 'BWF court', 'Indoor Wing', 'active')
+		INSERT INTO giki_sports.facilities (slug, name, description, status)
+		VALUES ('badminton-hall', 'Main Badminton Championship Hall', 'BWF court', 'active')
 		RETURNING id;
 	`).Scan(&idC)
 	if err != nil {
@@ -269,7 +269,7 @@ func TestFacilityRepository_ListAndAssociations(t *testing.T) {
 
 // TestFacilityRepository_GetBySlug_And_NullableFields verifies:
 // - Exact slug lookup
-// - Representation of non-null and NULL fields (description, location)
+// - Representation of non-null and NULL fields (description)
 // - Correct error on unknown slug
 func TestFacilityRepository_GetBySlug_And_NullableFields(t *testing.T) {
 	pool, teardown := setupDisposableDB(t)
@@ -281,19 +281,19 @@ func TestFacilityRepository_GetBySlug_And_NullableFields(t *testing.T) {
 	// 1. Insert facility with full non-null fields
 	var id1 string
 	err := pool.QueryRow(ctx, `
-		INSERT INTO giki_sports.facilities (slug, name, description, location, status)
-		VALUES ('tennis-court', 'Tennis Arena', 'US Open acrylic surface', 'South Perimeter Ground', 'active')
+		INSERT INTO giki_sports.facilities (slug, name, description, status)
+		VALUES ('tennis-court', 'Tennis Arena', 'US Open acrylic surface', 'active')
 		RETURNING id;
 	`).Scan(&id1)
 	if err != nil {
 		t.Fatalf("failed to insert facility 1: %v", err)
 	}
 
-	// 2. Insert facility with NULL description and NULL location
+	// 2. Insert facility with NULL description
 	var id2 string
 	err = pool.QueryRow(ctx, `
-		INSERT INTO giki_sports.facilities (slug, name, description, location, status)
-		VALUES ('squash-courts', 'Glass Squash Courts', NULL, NULL, 'closed')
+		INSERT INTO giki_sports.facilities (slug, name, description, status)
+		VALUES ('squash-courts', 'Glass Squash Courts', NULL, 'closed')
 		RETURNING id;
 	`).Scan(&id2)
 	if err != nil {
@@ -311,9 +311,6 @@ func TestFacilityRepository_GetBySlug_And_NullableFields(t *testing.T) {
 	if f1.Description == nil || *f1.Description != "US Open acrylic surface" {
 		t.Errorf("expected non-null description, got %v", f1.Description)
 	}
-	if f1.Location == nil || *f1.Location != "South Perimeter Ground" {
-		t.Errorf("expected non-null location, got %v", f1.Location)
-	}
 	if f1.Status != facility.StatusActive {
 		t.Errorf("expected status 'active', got %v", f1.Status)
 	}
@@ -325,9 +322,6 @@ func TestFacilityRepository_GetBySlug_And_NullableFields(t *testing.T) {
 	}
 	if f2.Description != nil {
 		t.Errorf("expected nil description for squash-courts, got %q", *f2.Description)
-	}
-	if f2.Location != nil {
-		t.Errorf("expected nil location for squash-courts, got %q", *f2.Location)
 	}
 	if f2.Status != facility.StatusClosed {
 		t.Errorf("expected status 'closed', got %v", f2.Status)
@@ -355,8 +349,8 @@ func TestFacilityRepository_EndTime24AndOvernightWindow(t *testing.T) {
 
 	var facilityID string
 	err := pool.QueryRow(ctx, `
-		INSERT INTO giki_sports.facilities (slug, name, description, location, status)
-		VALUES ('night-futsal', 'Night Futsal Arena', 'Floodlit turf', 'Central Courtyard', 'active')
+		INSERT INTO giki_sports.facilities (slug, name, description, status)
+		VALUES ('night-futsal', 'Night Futsal Arena', 'Floodlit turf', 'active')
 		RETURNING id;
 	`).Scan(&facilityID)
 	if err != nil {
@@ -1022,7 +1016,7 @@ func TestFacilityRepository_UpdateScheduleWithAudit_RollbackOnScheduleError(t *t
 	`, actorID)
 
 	var facID, s1ID, s2ID uuid.UUID
-	_ = pool.QueryRow(ctx, "INSERT INTO giki_sports.facilities (slug, name, status) VALUES ('table-tennis', 'Table Tennis Hall', 'active') RETURNING id;").Scan(&facID)
+	_ = pool.QueryRow(ctx, "INSERT INTO giki_sports.facilities (slug, name, status) VALUES ('table-tennis', 'Table Tennis', 'active') RETURNING id;").Scan(&facID)
 	_ = pool.QueryRow(ctx, "INSERT INTO giki_sports.schedules (facility_id, day_of_week, start_time, end_time, audience) VALUES ($1, 1, '09:00:00', '12:00:00', 'student') RETURNING id;", facID).Scan(&s1ID)
 	_ = pool.QueryRow(ctx, "INSERT INTO giki_sports.schedules (facility_id, day_of_week, start_time, end_time, audience) VALUES ($1, 1, '14:00:00', '17:00:00', 'student') RETURNING id;", facID).Scan(&s2ID)
 
@@ -1104,8 +1098,8 @@ func TestFacilityRepository_DeleteScheduleWithAudit_Success(t *testing.T) {
 	// Seed facility
 	var facID uuid.UUID
 	err = pool.QueryRow(ctx, `
-		INSERT INTO giki_sports.facilities (slug, name, description, location, status)
-		VALUES ('del-badminton', 'Delete Badminton Court', 'Test Arena', 'Hall B', 'active')
+		INSERT INTO giki_sports.facilities (slug, name, description, status)
+		VALUES ('del-badminton', 'Delete Badminton Court', 'Test Arena', 'active')
 		RETURNING id;
 	`).Scan(&facID)
 	if err != nil {

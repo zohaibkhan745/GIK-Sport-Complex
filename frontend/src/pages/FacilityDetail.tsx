@@ -12,9 +12,13 @@ import {
   Plus,
   ArrowRight,
   Dumbbell,
+  Pencil,
+  Info,
 } from "lucide-react";
 import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
+import { EditFacilityModal } from "../components/EditFacilityModal";
+import { TimePicker } from "../components/TimePicker";
 import { api, ApiError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -122,7 +126,7 @@ export function isWindowActiveNow(startTime: string, endTime: string, now = new 
 
 export interface GoogleMapsLiveStatus {
   isOpen: boolean;
-  badge: "Open now" | "Closed" | "Temporarily Closed" | "Schedule Pending";
+  badge: "Open now" | "Closed" | "Temporarily Closed" | "Schedule Pending" | "Reserved";
   detail: string;
   badgeClass: string;
   dotClass: string;
@@ -132,6 +136,28 @@ function getAudienceLabel(audience: string): string {
   if (AUDIENCE_LABELS[audience]) return AUDIENCE_LABELS[audience];
   if (audience === "all") return "Open to All";
   return audience;
+}
+
+function formatTimeSafe(iso?: string | null): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+function formatDateTimeSafe(iso?: string | null): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString([], { month: "short", day: "numeric" }) + " at " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  } catch {
+    return "";
+  }
 }
 
 export function getGoogleMapsStatus(
@@ -148,21 +174,41 @@ export function getGoogleMapsStatus(
     };
   }
 
+  const formatUntil = (iso?: string | null) => {
+    const t = formatTimeSafe(iso);
+    return t ? ` until ${t}` : "";
+  };
+
+  if (facility.status === "reserved") {
+    let detail = facility.reservedFor ? `Reserved for ${facility.reservedFor}` : "Reserved for campus event";
+    detail += formatUntil(facility.statusUntil);
+    return {
+      isOpen: false,
+      badge: "Reserved",
+      detail,
+      badgeClass: "border-purple-400/40 bg-purple-500/20 text-purple-200",
+      dotClass: "bg-purple-400",
+    };
+  }
+
   if (facility.status === "maintenance") {
+    let detail = "Under scheduled maintenance";
+    detail += formatUntil(facility.statusUntil);
     return {
       isOpen: false,
       badge: "Temporarily Closed",
-      detail: "Under scheduled maintenance",
+      detail,
       badgeClass: "border-amber-400/40 bg-amber-500/20 text-amber-200",
       dotClass: "bg-amber-400",
     };
   }
 
   if (facility.status === "closed") {
+    let detail = facility.statusUntil ? `Closed${formatUntil(facility.statusUntil)}` : "Closed until further notice";
     return {
       isOpen: false,
       badge: "Closed",
-      detail: "Closed until further notice",
+      detail,
       badgeClass: "border-slate-400/40 bg-slate-500/20 text-slate-300",
       dotClass: "bg-slate-400",
     };
@@ -268,13 +314,43 @@ export const WEEKDAYS = [
   { day: 7, label: "Sun", full: "Sunday" },
 ] as const;
 
-export const AUDIENCE_OPTIONS = [
-  { value: "student", label: "Students", detail: "GIKI enrolled students" },
-  { value: "staff", label: "Staff & Families", detail: "Employees, staff & kids/dependents" },
-  { value: "faculty", label: "Faculty", detail: "Teaching & research faculty" },
+export const CAMPUS_AUDIENCE_OPTIONS = [
+  { value: "student", label: "Students", detail: "General GIKI enrolled students" },
+  { value: "staff", label: "Staff & Families", detail: "Employees, staff & employee kids" },
+  { value: "faculty", label: "Faculty", detail: "Teaching & research faculty, graduate MS/PhD" },
   { value: "women_only", label: "Women Only", detail: "Designated women-only sessions" },
   { value: "general", label: "General Community", detail: "Open to all campus community members" },
 ] as const;
+
+export const TEAM_AUDIENCE_OPTIONS = [
+  { value: "badminton_team", label: "GIK Badminton Team + Girls", detail: "Varsity badminton squad & girls players" },
+  { value: "basketball_boys", label: "Basketball Boys (GIKI Team)", detail: "Varsity men's basketball squad" },
+  { value: "basketball_girls", label: "Basketball Girls (GIKI Team)", detail: "Varsity women's basketball squad" },
+  { value: "volleyball_boys", label: "Volleyball Boys", detail: "GIKI men's volleyball squad" },
+  { value: "volleyball_girls", label: "Volleyball Girls", detail: "GIKI women's volleyball squad" },
+  { value: "cricket_team", label: "Cricket GIKI Teams", detail: "Hard ball & tennis ball cricket squads" },
+  { value: "football_team", label: "GIKI Football Team", detail: "Varsity football / soccer squad" },
+  { value: "tennis_team", label: "Lawn Tennis (GIKI Team)", detail: "Varsity tennis squad" },
+  { value: "squash_team", label: "Squash (GIKI Team)", detail: "Varsity squash squad" },
+  { value: "squash_faculty", label: "Squash Faculty", detail: "Faculty & senior staff squash players" },
+  { value: "table_tennis_team", label: "Table Tennis (GIKI Team)", detail: "Varsity table tennis squad" },
+] as const;
+
+export const AUDIENCE_OPTIONS = [
+  ...CAMPUS_AUDIENCE_OPTIONS,
+  ...TEAM_AUDIENCE_OPTIONS,
+] as const;
+
+export interface GroupedScheduleWindow {
+  key: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  schedules: Schedule[];
+  audiences: string[];
+  audienceText: string;
+  primaryId: string;
+}
 
 function sortSchedules(schedules: Schedule[]): Schedule[] {
   return [...schedules].sort((a, b) => {
@@ -352,6 +428,47 @@ export function FacilityDetail() {
     return facility.schedules.filter((s) => s.dayOfWeek === selectedDay);
   }, [facility, selectedDay]);
 
+  const groupedVisibleSchedules = useMemo((): GroupedScheduleWindow[] => {
+    const map = new Map<string, GroupedScheduleWindow>();
+
+    for (const s of visibleSchedules) {
+      const key = `${s.dayOfWeek}-${s.startTime}-${s.endTime}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.schedules.push(s);
+        if (!existing.audiences.includes(s.audience)) {
+          existing.audiences.push(s.audience);
+        }
+      } else {
+        map.set(key, {
+          key,
+          dayOfWeek: s.dayOfWeek,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          schedules: [s],
+          audiences: [s.audience],
+          audienceText: "",
+          primaryId: s.id,
+        });
+      }
+    }
+
+    const groups = Array.from(map.values());
+    for (const g of groups) {
+      const order = AUDIENCE_OPTIONS.map((o) => o.value as string);
+      g.audiences.sort((a, b) => {
+        const ia = order.indexOf(a);
+        const ib = order.indexOf(b);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      });
+      g.audienceText = g.audiences
+        .map((aud) => AUDIENCE_LABELS[aud] ?? aud)
+        .join(" + ");
+    }
+
+    return groups;
+  }, [visibleSchedules]);
+
   const handleGoBack = useCallback(() => {
     if (window.history.state && typeof window.history.state.idx === "number" && window.history.state.idx > 0) {
       navigate(-1);
@@ -373,18 +490,21 @@ export function FacilityDetail() {
         user.roles.includes("super_admin"))
   );
 
-  // Inline editing state: tracks one schedule row at a time
+  // Inline editing state: tracks one schedule window at a time
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
+  const [_editingGroup, setEditingGroup] = useState<GroupedScheduleWindow | null>(null);
   const [draftDayOfWeek, setDraftDayOfWeek] = useState<number>(1);
   const [draftStartTime, setDraftStartTime] = useState<string>("09:00:00");
   const [draftEndTime, setDraftEndTime] = useState<string>("12:00:00");
   const [draftAudience, setDraftAudience] = useState<string>("student");
+  const [_draftAudiences, setDraftAudiences] = useState<string[]>(["student"]);
   const [editAdditionalAudiences, setEditAdditionalAudiences] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  // Deletion state: tracks one schedule row confirmation at a time
+  // Deletion state: tracks one schedule window confirmation at a time
   const [deletingScheduleId, setDeletingScheduleId] = useState<string | null>(null);
+  const [deletingGroup, setDeletingGroup] = useState<GroupedScheduleWindow | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [deleteError, setDeleteError] = useState<{
     message: string;
@@ -396,13 +516,15 @@ export function FacilityDetail() {
   const [addDayOfWeek, setAddDayOfWeek] = useState<number>(1);
   const [isMultiDay, setIsMultiDay] = useState<boolean>(false);
   const [multiDays, setMultiDays] = useState<number[]>([1]);
-  const [isMultiAudience, setIsMultiAudience] = useState<boolean>(false);
   const [multiAudiences, setMultiAudiences] = useState<string[]>(["student"]);
   const [addStartTime, setAddStartTime] = useState<string>("09:00:00");
   const [addEndTime, setAddEndTime] = useState<string>("12:00:00");
   const [addAudience, setAddAudience] = useState<string>("student");
   const [isSavingAdd, setIsSavingAdd] = useState<boolean>(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  // Facility edit modal state
+  const [isEditFacilityModalOpen, setIsEditFacilityModalOpen] = useState<boolean>(false);
 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -477,18 +599,34 @@ export function FacilityDetail() {
     return cancel;
   }, [fetchDetail]);
 
-  const startEditing = (s: Schedule) => {
+  const startEditing = (target: Schedule | GroupedScheduleWindow) => {
     if (isSaving || isDeleting || isSavingAdd) return;
     setIsAdding(false);
     setAddError(null);
     setDeletingScheduleId(null);
+    setDeletingGroup(null);
     setDeleteError(null);
-    setEditingScheduleId(s.id);
-    setDraftDayOfWeek(s.dayOfWeek);
-    setDraftStartTime(s.startTime);
-    setDraftEndTime(s.endTime);
-    setDraftAudience(s.audience);
-    setEditAdditionalAudiences([]);
+
+    if ("schedules" in target) {
+      setEditingScheduleId(target.primaryId);
+      setEditingGroup(target);
+      setDraftDayOfWeek(target.dayOfWeek);
+      setDraftStartTime(target.startTime);
+      setDraftEndTime(target.endTime);
+      const primaryAud = target.audiences[0] || "student";
+      setDraftAudience(primaryAud);
+      setEditAdditionalAudiences(target.audiences.slice(1));
+      setDraftAudiences([...target.audiences]);
+    } else {
+      setEditingScheduleId(target.id);
+      setEditingGroup(null);
+      setDraftDayOfWeek(target.dayOfWeek);
+      setDraftStartTime(target.startTime);
+      setDraftEndTime(target.endTime);
+      setDraftAudience(target.audience);
+      setEditAdditionalAudiences([]);
+      setDraftAudiences([target.audience]);
+    }
     setEditError(null);
     setSuccessMessage(null);
   };
@@ -496,25 +634,35 @@ export function FacilityDetail() {
   const cancelEditing = () => {
     if (isSaving) return;
     setEditingScheduleId(null);
+    setEditingGroup(null);
     setEditAdditionalAudiences([]);
     setEditError(null);
   };
 
-  const startDeleting = (s: Schedule) => {
+  const startDeleting = (target: Schedule | GroupedScheduleWindow) => {
     if (isSaving || isDeleting || isSavingAdd) return;
     setIsAdding(false);
     setAddError(null);
     setEditingScheduleId(null);
+    setEditingGroup(null);
     setEditError(null);
     setDeleteError(null);
     setSuccessMessage(null);
-    setDeletingScheduleId(s.id);
+
+    if ("schedules" in target) {
+      setDeletingScheduleId(target.primaryId);
+      setDeletingGroup(target);
+    } else {
+      setDeletingScheduleId(target.id);
+      setDeletingGroup(null);
+    }
   };
 
   const cancelDeleting = () => {
     if (isDeleting) return;
     const targetId = deletingScheduleId;
     setDeletingScheduleId(null);
+    setDeletingGroup(null);
     setDeleteError(null);
     if (targetId) {
       setTimeout(() => {
@@ -524,7 +672,10 @@ export function FacilityDetail() {
     }
   };
 
-  const handleConfirmDelete = async (scheduleId: string) => {
+  const handleConfirmDelete = async (
+    scheduleId: string,
+    group?: GroupedScheduleWindow | null
+  ) => {
     if (isDeleting || !slug) return;
 
     const targetSlug = slug;
@@ -532,8 +683,21 @@ export function FacilityDetail() {
     setDeleteError(null);
     setSuccessMessage(null);
 
+    const targetGroup = group || deletingGroup;
+    const schedulesToDelete: Schedule[] =
+      targetGroup && targetGroup.primaryId === scheduleId
+        ? targetGroup.schedules
+        : facility?.schedules.filter((s) => s.id === scheduleId) || [];
+
+    const idsToDelete =
+      schedulesToDelete.length > 0
+        ? schedulesToDelete.map((s) => s.id)
+        : [scheduleId];
+
     try {
-      await api.deleteSchedule(targetSlug, scheduleId);
+      for (const id of idsToDelete) {
+        await api.deleteSchedule(targetSlug, id);
+      }
 
       // Guard against late response after navigating away
       if (!isMountedRef.current || currentSlugRef.current !== targetSlug) {
@@ -543,8 +707,9 @@ export function FacilityDetail() {
       // Update timetable only after confirmed 204
       setFacility((prev) => {
         if (!prev || prev.slug !== targetSlug) return prev;
-        const idx = prev.schedules.findIndex((item) => item.id === scheduleId);
-        const remaining = prev.schedules.filter((item) => item.id !== scheduleId);
+        const remaining = prev.schedules.filter(
+          (item) => !idsToDelete.includes(item.id)
+        );
 
         // Move focus to a sensible nearby control after the deleted row disappears
         if (remaining.length === 0) {
@@ -552,12 +717,10 @@ export function FacilityDetail() {
             scheduleHeadingRef.current?.focus();
           }, 0);
         } else {
-          const targetIdx = idx < remaining.length ? idx : remaining.length - 1;
-          const target = remaining[targetIdx];
           setTimeout(() => {
             const btn =
-              document.getElementById(`delete-btn-${target.id}`) ||
-              document.getElementById(`edit-btn-${target.id}`);
+              document.getElementById(`delete-btn-${remaining[0]?.id}`) ||
+              document.getElementById(`edit-btn-${remaining[0]?.id}`);
             btn?.focus();
           }, 0);
         }
@@ -569,6 +732,7 @@ export function FacilityDetail() {
       });
 
       setDeletingScheduleId(null);
+      setDeletingGroup(null);
       setDeleteError(null);
       setSuccessMessage("Schedule window deleted successfully.");
     } catch (err) {
@@ -629,13 +793,7 @@ export function FacilityDetail() {
     if (dayOfWeek < 1 || dayOfWeek > 7) {
       return "Day of week must be between Monday (1) and Sunday (7).";
     }
-    const validAudiences = [
-      "general",
-      "student",
-      "faculty",
-      "women_only",
-      "staff",
-    ];
+    const validAudiences = AUDIENCE_OPTIONS.map((a) => a.value as string);
     if (!validAudiences.includes(audience)) {
       return "Please select a supported audience cohort.";
     }
@@ -682,7 +840,6 @@ export function FacilityDetail() {
     setAddDayOfWeek(initialDay);
     setIsMultiDay(false);
     setMultiDays([initialDay]);
-    setIsMultiAudience(false);
     setMultiAudiences(["student"]);
     setAddStartTime("09:00:00");
     setAddEndTime("12:00:00");
@@ -695,8 +852,8 @@ export function FacilityDetail() {
     if (isSavingAdd) return;
     setIsAdding(false);
     setIsMultiDay(false);
-    setIsMultiAudience(false);
     setMultiAudiences(["student"]);
+    setAddAudience("student");
     setAddError(null);
     setTimeout(() => {
       addWindowButtonRef.current?.focus();
@@ -707,7 +864,7 @@ export function FacilityDetail() {
     if (isSavingAdd || !slug) return;
 
     const targetDays = isMultiDay ? multiDays : [addDayOfWeek];
-    const targetAudiences = isMultiAudience ? multiAudiences : [addAudience];
+    const targetAudiences = multiAudiences.length > 0 ? multiAudiences : [addAudience];
 
     if (targetDays.length === 0) {
       setAddError("Please select at least one day to apply this schedule.");
@@ -715,7 +872,7 @@ export function FacilityDetail() {
     }
 
     if (targetAudiences.length === 0) {
-      setAddError("Please select at least one audience cohort to apply this schedule.");
+      setAddError("Please select at least one audience cohort (e.g. Students, Staff & Families).");
       return;
     }
 
@@ -778,8 +935,8 @@ export function FacilityDetail() {
         setIsAdding(false);
         setAddError(null);
         setIsMultiDay(false);
-        setIsMultiAudience(false);
         setMultiAudiences(["student"]);
+        setAddAudience("student");
 
         if (duplicateSlots.length > 0) {
           const dupInfo = duplicateSlots
@@ -862,7 +1019,7 @@ export function FacilityDetail() {
     }
   };
 
-  const handleSave = async (scheduleId: string) => {
+  const handleSave = async (scheduleId: string, _group?: GroupedScheduleWindow) => {
     if (isSaving || !slug) return;
 
     const clientErr = validateDraft();
@@ -1086,15 +1243,76 @@ export function FacilityDetail() {
                   </span>
                 </div>
 
-                {facility.description ? (
-                  <p className="mt-2 text-sm text-[var(--color-gold-light)]">
-                    {facility.description}
-                  </p>
-                ) : (
-                  <p className="mt-2 text-sm italic text-[var(--color-gold-light)]/80">
-                    No description provided for this facility.
-                  </p>
-                )}
+                  <div className="mt-2">
+                    {/* Status Notice / Reservation Banner */}
+                    {(facility.status === "reserved" || facility.statusNote || (facility.status !== "active" && facility.statusUntil)) && (
+                      <div
+                        data-testid="facility-status-notice"
+                        className={`mb-3 rounded-lg border p-3 text-xs flex items-start gap-2.5 ${
+                          facility.status === "reserved"
+                            ? "border-purple-400/50 bg-purple-950/40 text-purple-200"
+                            : facility.status === "maintenance"
+                            ? "border-amber-400/50 bg-amber-950/40 text-amber-200"
+                            : facility.status === "closed"
+                            ? "border-slate-400/50 bg-slate-900/50 text-slate-200"
+                            : "border-[var(--color-gold)]/40 bg-[var(--color-navy-soft)]/50 text-[var(--color-gold-light)]"
+                        }`}
+                      >
+                        <Info size={16} className="shrink-0 mt-0.5 text-current opacity-90" />
+                        <div className="space-y-0.5">
+                          {facility.status === "reserved" && (
+                            <p className="font-semibold text-white">
+                              Reserved {facility.reservedFor ? `for ${facility.reservedFor}` : "for Campus Event"}
+                              {facility.statusUntil && (
+                                <span className="font-normal text-purple-300 ml-1">
+                                  (until {formatTimeSafe(facility.statusUntil)})
+                                </span>
+                              )}
+                            </p>
+                          )}
+                          {facility.status === "maintenance" && facility.statusUntil && (
+                            <p className="font-semibold text-white">
+                              Scheduled maintenance until {formatDateTimeSafe(facility.statusUntil)}
+                            </p>
+                          )}
+                          {facility.status === "closed" && facility.statusUntil && (
+                            <p className="font-semibold text-white">
+                              Temporarily closed until {formatDateTimeSafe(facility.statusUntil)}
+                            </p>
+                          )}
+                          {facility.statusNote && (
+                            <p className="leading-relaxed opacity-95">
+                              {facility.statusNote}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {facility.description?.trim() ? (
+                      <p
+                        data-testid="facility-description-text"
+                        className="text-sm text-[var(--color-gold-light)] leading-relaxed"
+                      >
+                        {facility.description}
+                      </p>
+                    ) : null}
+
+                    {canEditSchedule && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsEditFacilityModalOpen(true)}
+                          data-testid="edit-facility-btn"
+                          aria-label="Edit facility details"
+                          className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-gold)] bg-[var(--color-gold)]/20 px-3 py-1 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-[var(--color-gold)]/30 hover:border-white focus-visible:outline-2 focus-visible:outline-[var(--color-gold)] cursor-pointer"
+                        >
+                          <Pencil size={13} className="text-[var(--color-gold)]" />
+                          <span>Edit Facility</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
               </div>
             </div>
 
@@ -1231,16 +1449,6 @@ export function FacilityDetail() {
               </div>
             )}
 
-            {facility.schedules.some((s) => s.audience === "women_only") && (
-              <div
-                data-testid="women-only-hours-callout"
-                className="mt-3.5 flex items-center gap-2 rounded-lg border border-purple-200 bg-purple-50/70 px-3.5 py-2 text-xs text-purple-900"
-              >
-                <span className="font-semibold text-purple-800">Women-Only Hours:</span>
-                <span>Designated weekly operating windows reserved for female students and staff. See timetable below.</span>
-              </div>
-            )}
-
             {/* Weekly Timetable */}
             <section className="mt-8">
               <div className="flex items-center justify-between">
@@ -1252,11 +1460,6 @@ export function FacilityDetail() {
                   >
                     Weekly Operating Schedule
                   </h2>
-                  <p className="mt-0.5 flex items-center gap-1 text-xs text-[var(--color-navy-soft)]">
-                    <Clock size={12} />
-                    Times displayed in local Asia/Karachi (PKT, UTC+5) wall-clock
-                    time. End time 24:00:00 indicates midnight end-of-day.
-                  </p>
                 </div>
                 {canEditSchedule && !isAdding && (
                   <button
@@ -1441,7 +1644,7 @@ export function FacilityDetail() {
                       </div>
                     )}
 
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                       {/* Day of Week */}
                       <div>
                         <label
@@ -1474,200 +1677,179 @@ export function FacilityDetail() {
                       <div>
                         <label
                           htmlFor="add-start"
-                          className="block text-xs font-medium text-[var(--color-navy)] mb-1"
+                          className="block text-xs font-semibold uppercase tracking-wider text-[var(--color-navy)] mb-1"
                         >
-                          Start Time (HH:MM:SS)
+                          Start Time
                         </label>
-                        <input
+                        <TimePicker
                           id="add-start"
-                          aria-label="Start time"
-                          type="text"
-                          disabled={isSavingAdd}
+                          ariaLabel="Start time"
                           value={addStartTime}
-                          onChange={(e) => setAddStartTime(e.target.value)}
+                          onChange={setAddStartTime}
+                          disabled={isSavingAdd}
                           placeholder="09:00:00"
-                          className="w-full rounded-md border border-[var(--color-border)] bg-white px-2.5 py-1.5 text-xs font-mono text-[var(--color-navy)] focus:border-[var(--color-maroon)] focus:outline-none disabled:opacity-50"
                         />
                       </div>
 
                       {/* End Time */}
                       <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label
-                            htmlFor="add-end"
-                            className="block text-xs font-medium text-[var(--color-navy)]"
-                          >
-                            End Time (HH:MM:SS)
-                          </label>
-                          <button
-                            type="button"
-                            disabled={isSavingAdd}
-                            onClick={() => setAddEndTime("24:00:00")}
-                            data-testid="add-set-midnight-btn"
-                            className="text-[10px] font-semibold text-[var(--color-maroon)] hover:underline focus:outline-none disabled:opacity-50"
-                          >
-                            Set 24:00:00
-                          </button>
-                        </div>
-                        <input
-                          id="add-end"
-                          aria-label="End time"
-                          type="text"
-                          disabled={isSavingAdd}
-                          value={addEndTime}
-                          onChange={(e) => setAddEndTime(e.target.value)}
-                          placeholder="12:00:00"
-                          className="w-full rounded-md border border-[var(--color-border)] bg-white px-2.5 py-1.5 text-xs font-mono text-[var(--color-navy)] focus:border-[var(--color-maroon)] focus:outline-none disabled:opacity-50"
-                        />
-                      </div>
-
-                      {/* Audience */}
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label
-                            htmlFor="add-audience"
-                            className="block text-xs font-medium text-[var(--color-navy)]"
-                          >
-                            Audience
-                          </label>
-                          <button
-                            type="button"
-                            disabled={isSavingAdd}
-                            onClick={() => {
-                              setIsMultiAudience((prev) => !prev);
-                              if (!isMultiAudience && multiAudiences.length === 0) {
-                                setMultiAudiences([addAudience]);
-                              }
-                            }}
-                            className="text-[10px] font-semibold text-[var(--color-maroon)] hover:underline focus:outline-none disabled:opacity-50"
-                          >
-                            {isMultiAudience ? "Single audience" : "+ Multiple audiences"}
-                          </button>
-                        </div>
-                        <select
-                          id="add-audience"
-                          aria-label="Audience"
-                          disabled={isSavingAdd}
-                          value={addAudience}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === "__multiple__") {
-                              setIsMultiAudience(true);
-                              if (!multiAudiences.includes(addAudience)) {
-                                setMultiAudiences([addAudience]);
-                              }
-                            } else {
-                              setAddAudience(val);
-                              setMultiAudiences([val]);
-                            }
-                          }}
-                          className="w-full rounded-md border border-[var(--color-border)] bg-white px-2.5 py-1.5 text-xs text-[var(--color-navy)] focus:border-[var(--color-maroon)] focus:outline-none disabled:opacity-50"
+                        <label
+                          htmlFor="add-end"
+                          className="block text-xs font-semibold uppercase tracking-wider text-[var(--color-navy)] mb-1"
                         >
-                          <option value="general">
-                            General Community
-                          </option>
-                          <option value="student">Students</option>
-                          <option value="faculty">Faculty</option>
-                          <option value="women_only">
-                            Women Only
-                          </option>
-                          <option value="staff">Staff & Families (Employees / Kids)</option>
-                          <option value="__multiple__">+ Select multiple audiences...</option>
-                        </select>
+                          End Time
+                        </label>
+                        <TimePicker
+                          id="add-end"
+                          ariaLabel="End time"
+                          value={addEndTime}
+                          onChange={setAddEndTime}
+                          isEndTime={true}
+                          disabled={isSavingAdd}
+                          placeholder="12:00:00"
+                          midnightButtonTestId="add-set-midnight-btn"
+                        />
                       </div>
                     </div>
 
-                    {/* Multi-Audience / Recurring Allocation Section */}
+                    {/* Accessible hidden select for tests & assistive tech */}
+                    <select
+                      id="add-audience"
+                      aria-label="Audience"
+                      disabled={isSavingAdd}
+                      value={addAudience}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAddAudience(val);
+                        setMultiAudiences([val]);
+                      }}
+                      className="sr-only"
+                    >
+                      <optgroup label="Section A: Campus Cohorts">
+                        {CAMPUS_AUDIENCE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Section B: GIKI Sports Teams & Dedicated Cohorts">
+                        {TEAM_AUDIENCE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
+
+                    {/* Target Audiences: Approach 2 - Both Section A & Section B toggleable in any combination */}
                     <div className="pt-2 border-t border-[var(--color-border)]/60">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[var(--color-navy)]">
-                          <input
-                            type="checkbox"
-                            data-testid="toggle-multi-audience-checkbox"
-                            aria-label="Allocate to multiple audiences"
-                            checked={isMultiAudience}
-                            disabled={isSavingAdd}
-                            onChange={(e) => {
-                              const checked = e.target.checked;
-                              setIsMultiAudience(checked);
-                              if (checked && multiAudiences.length === 0) {
-                                setMultiAudiences([addAudience]);
-                              }
-                            }}
-                            className="h-3.5 w-3.5 rounded border-[var(--color-border)] text-[var(--color-maroon)] focus:ring-[var(--color-gold)] cursor-pointer"
-                          />
-                          <span>Allocate to multiple audiences (e.g. Students + Employee's Kids / Staff)</span>
-                        </label>
-
-                        {isMultiAudience && (
-                          <div className="flex flex-wrap items-center gap-1 text-[11px]">
-                            <button
-                              type="button"
-                              disabled={isSavingAdd}
-                              onClick={() => setMultiAudiences(["student", "staff"])}
-                              className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-navy-soft)] hover:text-[var(--color-navy)] hover:bg-[var(--color-surface)] cursor-pointer"
-                            >
-                              Students + Staff/Kids
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isSavingAdd}
-                              onClick={() => setMultiAudiences(["student", "faculty", "staff"])}
-                              className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-navy-soft)] hover:text-[var(--color-navy)] hover:bg-[var(--color-surface)] cursor-pointer"
-                            >
-                              All Campus
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isSavingAdd}
-                              onClick={() => setMultiAudiences(["student", "faculty", "staff", "women_only", "general"])}
-                              className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-navy-soft)] hover:text-[var(--color-navy)] hover:bg-[var(--color-surface)] cursor-pointer"
-                            >
-                              Select All
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {isMultiAudience && (
-                        <div
-                          data-testid="multi-audience-pills-container"
-                          className="mt-2.5 flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-[var(--color-border)]/40"
-                        >
-                          <span className="text-[11px] font-medium text-[var(--color-navy-soft)] mr-1">
-                            Target Audiences:
+                      <div
+                        data-testid="multi-audience-pills-container"
+                        className="space-y-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-1">
+                          <span className="text-xs font-semibold text-[var(--color-navy)]">
+                            Target Audiences (select any combination across sections):
                           </span>
-                          {AUDIENCE_OPTIONS.map(({ value, label, detail }) => {
-                            const isChecked = multiAudiences.includes(value);
-                            return (
-                              <button
-                                key={value}
-                                type="button"
-                                disabled={isSavingAdd}
-                                title={detail}
-                                onClick={() => {
-                                  setMultiAudiences((prev) =>
-                                    prev.includes(value)
-                                      ? prev.filter((a) => a !== value)
-                                      : [...prev, value]
-                                  );
-                                }}
-                                data-testid={`multi-audience-btn-${value}`}
-                                aria-label={`Toggle ${label}`}
-                                aria-pressed={isChecked}
-                                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
-                                  isChecked
-                                    ? "bg-[var(--color-maroon)] text-white shadow-2xs"
-                                    : "border border-[var(--color-border)] bg-white text-[var(--color-navy)] hover:bg-[var(--color-surface)]"
-                                }`}
-                              >
-                                {isChecked && <span className="text-[10px]">✓</span>}
-                                <span>{label}</span>
-                              </button>
-                            );
-                          })}
+                          <span className="text-[11px] font-medium text-[var(--color-maroon)]">
+                            {multiAudiences.length} {multiAudiences.length === 1 ? "audience" : "audiences"} selected
+                          </span>
                         </div>
-                      )}
+
+                        {/* Section A: Campus Cohorts */}
+                        <div className="rounded-lg border border-[var(--color-border)]/70 bg-stone-50/50 p-2.5">
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-maroon)]">
+                              Section A • Campus Cohorts
+                            </span>
+                            <span className="text-[10px] text-[var(--color-navy-soft)]">
+                              Campus groups & community
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {CAMPUS_AUDIENCE_OPTIONS.map(({ value, label, detail }) => {
+                              const isChecked = multiAudiences.includes(value);
+                              return (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  disabled={isSavingAdd}
+                                  title={detail}
+                                  onClick={() => {
+                                    setMultiAudiences((prev) => {
+                                      const next = prev.includes(value)
+                                        ? prev.filter((a) => a !== value)
+                                        : [...prev, value];
+                                      if (next.length > 0) {
+                                        setAddAudience(next[0]);
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                  data-testid={`multi-audience-btn-${value}`}
+                                  aria-label={`Toggle ${label}`}
+                                  aria-pressed={isChecked}
+                                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                                    isChecked
+                                      ? "bg-[var(--color-maroon)] text-white shadow-2xs"
+                                      : "border border-[var(--color-border)] bg-white text-[var(--color-navy)] hover:bg-[var(--color-surface)]"
+                                  }`}
+                                >
+                                  {isChecked && <span className="text-[10px]">✓</span>}
+                                  <span>{label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Section B: GIKI Sports Teams & Dedicated Cohorts */}
+                        <div className="rounded-lg border border-[var(--color-border)]/70 bg-stone-50/50 p-2.5">
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-navy)]">
+                              Section B • GIKI Sports Teams & Dedicated Cohorts
+                            </span>
+                            <span className="text-[10px] text-[var(--color-navy-soft)]">
+                              Varsity teams & dedicated sports squads
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {TEAM_AUDIENCE_OPTIONS.map(({ value, label, detail }) => {
+                              const isChecked = multiAudiences.includes(value);
+                              return (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  disabled={isSavingAdd}
+                                  title={detail}
+                                  onClick={() => {
+                                    setMultiAudiences((prev) => {
+                                      const next = prev.includes(value)
+                                        ? prev.filter((a) => a !== value)
+                                        : [...prev, value];
+                                      if (next.length > 0) {
+                                        setAddAudience(next[0]);
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                  data-testid={`multi-audience-btn-${value}`}
+                                  aria-label={`Toggle ${label}`}
+                                  aria-pressed={isChecked}
+                                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                                    isChecked
+                                      ? "bg-[var(--color-navy)] text-white shadow-2xs"
+                                      : "border border-[var(--color-border)] bg-white text-[var(--color-navy)] hover:bg-[var(--color-surface)]"
+                                  }`}
+                                >
+                                  {isChecked && <span className="text-[10px]">✓</span>}
+                                  <span>{label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Multi-Day / Recurring Weekly Application */}
@@ -1863,20 +2045,20 @@ export function FacilityDetail() {
                 </div>
               ) : (
                 <div className="mt-3 divide-y divide-[var(--color-border)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
-                  {visibleSchedules.map((s) => {
-                    const isEditingThisRow = editingScheduleId === s.id;
+                  {groupedVisibleSchedules.map((group) => {
+                    const isEditingThisRow = editingScheduleId === group.primaryId;
 
                     if (isEditingThisRow) {
                       return (
                         <div
-                          key={s.id}
+                          key={group.key}
                           className="bg-white p-4 first:rounded-t-xl last:rounded-b-xl"
                         >
                           <form
-                            data-testid={`schedule-edit-form-${s.id}`}
+                            data-testid={`schedule-edit-form-${group.primaryId}`}
                             onSubmit={(e) => {
                               e.preventDefault();
-                              handleSave(s.id);
+                              handleSave(group.primaryId, group);
                             }}
                             className="space-y-3"
                           >
@@ -1903,13 +2085,13 @@ export function FacilityDetail() {
                               {/* Day of Week */}
                               <div>
                                 <label
-                                  htmlFor={`edit-day-${s.id}`}
+                                  htmlFor={`edit-day-${group.primaryId}`}
                                   className="block text-xs font-medium text-[var(--color-navy)] mb-1"
                                 >
                                   Day of Week
                                 </label>
                                 <select
-                                  id={`edit-day-${s.id}`}
+                                  id={`edit-day-${group.primaryId}`}
                                   aria-label="Day of week"
                                   disabled={isSaving}
                                   value={draftDayOfWeek}
@@ -1931,67 +2113,50 @@ export function FacilityDetail() {
                               {/* Start Time */}
                               <div>
                                 <label
-                                  htmlFor={`edit-start-${s.id}`}
-                                  className="block text-xs font-medium text-[var(--color-navy)] mb-1"
+                                  htmlFor={`edit-start-${group.primaryId}`}
+                                  className="block text-xs font-semibold uppercase tracking-wider text-[var(--color-navy)] mb-1"
                                 >
-                                  Start Time (HH:MM:SS)
+                                  Start Time
                                 </label>
-                                <input
-                                  id={`edit-start-${s.id}`}
-                                  aria-label="Start time"
-                                  type="text"
-                                  disabled={isSaving}
+                                <TimePicker
+                                  id={`edit-start-${group.primaryId}`}
+                                  ariaLabel="Start time"
                                   value={draftStartTime}
-                                  onChange={(e) =>
-                                    setDraftStartTime(e.target.value)
-                                  }
+                                  onChange={setDraftStartTime}
+                                  disabled={isSaving}
                                   placeholder="09:00:00"
-                                  className="w-full rounded-md border border-[var(--color-border)] bg-white px-2.5 py-1.5 text-xs font-mono text-[var(--color-navy)] focus:border-[var(--color-maroon)] focus:outline-none"
                                 />
                               </div>
 
                               {/* End Time */}
                               <div>
-                                <div className="flex items-center justify-between mb-1">
-                                  <label
-                                    htmlFor={`edit-end-${s.id}`}
-                                    className="block text-xs font-medium text-[var(--color-navy)]"
-                                  >
-                                    End Time (HH:MM:SS)
-                                  </label>
-                                  <button
-                                    type="button"
-                                    disabled={isSaving}
-                                    onClick={() => setDraftEndTime("24:00:00")}
-                                    className="text-[10px] font-semibold text-[var(--color-maroon)] hover:underline focus:outline-none disabled:opacity-50"
-                                  >
-                                    Set 24:00:00
-                                  </button>
-                                </div>
-                                <input
-                                  id={`edit-end-${s.id}`}
-                                  aria-label="End time"
-                                  type="text"
-                                  disabled={isSaving}
+                                <label
+                                  htmlFor={`edit-end-${group.primaryId}`}
+                                  className="block text-xs font-semibold uppercase tracking-wider text-[var(--color-navy)] mb-1"
+                                >
+                                  End Time
+                                </label>
+                                <TimePicker
+                                  id={`edit-end-${group.primaryId}`}
+                                  ariaLabel="End time"
                                   value={draftEndTime}
-                                  onChange={(e) =>
-                                    setDraftEndTime(e.target.value)
-                                  }
+                                  onChange={setDraftEndTime}
+                                  isEndTime={true}
+                                  disabled={isSaving}
                                   placeholder="12:00:00"
-                                  className="w-full rounded-md border border-[var(--color-border)] bg-white px-2.5 py-1.5 text-xs font-mono text-[var(--color-navy)] focus:border-[var(--color-maroon)] focus:outline-none"
                                 />
                               </div>
 
                               {/* Audience */}
                               <div>
                                 <label
-                                  htmlFor={`edit-audience-${s.id}`}
+                                  htmlFor={`edit-audience-${group.primaryId}`}
                                   className="block text-xs font-medium text-[var(--color-navy)] mb-1"
                                 >
                                   Audience
                                 </label>
                                 <select
-                                  id={`edit-audience-${s.id}`}
+                                  id={`edit-audience-${group.primaryId}`}
                                   aria-label="Audience"
                                   disabled={isSaving}
                                   value={draftAudience}
@@ -2004,60 +2169,115 @@ export function FacilityDetail() {
                                   }}
                                   className="w-full rounded-md border border-[var(--color-border)] bg-white px-2.5 py-1.5 text-xs text-[var(--color-navy)] focus:border-[var(--color-maroon)] focus:outline-none"
                                 >
-                                  <option value="general">
-                                    General Community
-                                  </option>
-                                  <option value="student">Students</option>
-                                  <option value="faculty">Faculty</option>
-                                  <option value="women_only">
-                                    Women Only
-                                  </option>
-                                  <option value="staff">Staff & Families (Employees / Kids)</option>
+                                  <optgroup label="Section A: Campus Cohorts">
+                                    {CAMPUS_AUDIENCE_OPTIONS.map((o) => (
+                                      <option key={o.value} value={o.value}>
+                                        {o.label}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                  <optgroup label="Section B: GIKI Sports Teams & Dedicated Cohorts">
+                                    {TEAM_AUDIENCE_OPTIONS.map((o) => (
+                                      <option key={o.value} value={o.value}>
+                                        {o.label}
+                                      </option>
+                                    ))}
+                                  </optgroup>
                                 </select>
                               </div>
                             </div>
 
                             {/* Additional Audience Allocation in Edit Form */}
                             <div className="pt-2 border-t border-[var(--color-border)]/60">
-                              <div className="flex flex-col gap-1.5">
+                              <div className="flex flex-col gap-2">
                                 <span className="text-xs font-semibold text-[var(--color-navy)]">
                                   Also allocate this time window to additional audiences:
                                 </span>
-                                <div className="flex flex-wrap items-center gap-2 pt-1">
-                                  {AUDIENCE_OPTIONS.filter((a) => a.value !== draftAudience).map(
-                                    ({ value, label, detail }) => {
-                                      const isChecked = editAdditionalAudiences.includes(value);
-                                      return (
-                                        <label
-                                          key={value}
-                                          title={detail}
-                                          className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium cursor-pointer border transition-colors ${
-                                            isChecked
-                                              ? "bg-[var(--color-maroon)]/10 border-[var(--color-maroon)] text-[var(--color-maroon)] font-semibold"
-                                              : "bg-white border-[var(--color-border)] text-[var(--color-navy)] hover:bg-[var(--color-surface)]"
-                                          }`}
-                                        >
-                                          <input
-                                            type="checkbox"
-                                            disabled={isSaving}
-                                            data-testid={`edit-add-audience-${value}`}
-                                            checked={isChecked}
-                                            onChange={(e) => {
-                                              const checked = e.target.checked;
-                                              setEditAdditionalAudiences((prev) =>
-                                                checked
-                                                  ? [...prev, value]
-                                                  : prev.filter((a) => a !== value)
-                                              );
-                                            }}
-                                            className="h-3 w-3 rounded text-[var(--color-maroon)] cursor-pointer"
-                                          />
-                                          <span>{label}</span>
-                                        </label>
-                                      );
-                                    }
-                                  )}
+
+                                {/* Section A: Campus Cohorts */}
+                                <div>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-maroon)] block mb-1">
+                                    Section A • Campus Cohorts
+                                  </span>
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {CAMPUS_AUDIENCE_OPTIONS.filter((a) => a.value !== draftAudience).map(
+                                      ({ value, label, detail }) => {
+                                        const isChecked = editAdditionalAudiences.includes(value);
+                                        return (
+                                          <label
+                                            key={value}
+                                            title={detail}
+                                            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium cursor-pointer border transition-colors ${
+                                              isChecked
+                                                ? "bg-[var(--color-maroon)]/10 border-[var(--color-maroon)] text-[var(--color-maroon)] font-semibold"
+                                                : "bg-white border-[var(--color-border)] text-[var(--color-navy)] hover:bg-[var(--color-surface)]"
+                                            }`}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              disabled={isSaving}
+                                              data-testid={`edit-add-audience-${value}`}
+                                              checked={isChecked}
+                                              onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setEditAdditionalAudiences((prev) =>
+                                                  checked
+                                                    ? [...prev, value]
+                                                    : prev.filter((a) => a !== value)
+                                                );
+                                              }}
+                                              className="h-3 w-3 rounded text-[var(--color-maroon)] cursor-pointer"
+                                            />
+                                            <span>{label}</span>
+                                          </label>
+                                        );
+                                      }
+                                    )}
+                                  </div>
                                 </div>
+
+                                {/* Section B: GIKI Sports Teams & Dedicated Cohorts */}
+                                <div>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-navy)] block mb-1">
+                                    Section B • GIKI Sports Teams & Dedicated Cohorts
+                                  </span>
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {TEAM_AUDIENCE_OPTIONS.filter((a) => a.value !== draftAudience).map(
+                                      ({ value, label, detail }) => {
+                                        const isChecked = editAdditionalAudiences.includes(value);
+                                        return (
+                                          <label
+                                            key={value}
+                                            title={detail}
+                                            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium cursor-pointer border transition-colors ${
+                                              isChecked
+                                                ? "bg-[var(--color-navy)]/10 border-[var(--color-navy)] text-[var(--color-navy)] font-semibold"
+                                                : "bg-white border-[var(--color-border)] text-[var(--color-navy)] hover:bg-[var(--color-surface)]"
+                                            }`}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              disabled={isSaving}
+                                              data-testid={`edit-add-audience-${value}`}
+                                              checked={isChecked}
+                                              onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setEditAdditionalAudiences((prev) =>
+                                                  checked
+                                                    ? [...prev, value]
+                                                    : prev.filter((a) => a !== value)
+                                                );
+                                              }}
+                                              className="h-3 w-3 rounded text-[var(--color-navy)] cursor-pointer"
+                                            />
+                                            <span>{label}</span>
+                                          </label>
+                                        );
+                                      }
+                                    )}
+                                  </div>
+                                </div>
+
                                 <p className="text-[11px] text-[var(--color-navy-soft)]">
                                   Checking additional groups creates concurrent operating windows for this exact time slot (e.g. both students and employee kids).
                                 </p>
@@ -2095,18 +2315,18 @@ export function FacilityDetail() {
                       );
                     }
 
-                    const isDeletingThisRow = deletingScheduleId === s.id;
+                    const isDeletingThisRow = deletingScheduleId === group.primaryId;
 
                     if (isDeletingThisRow) {
                       return (
                         <div
-                          key={s.id}
+                          key={group.key}
                           role="region"
                           aria-label={`Confirm deletion of ${
-                            WEEKDAY_NAMES[s.dayOfWeek] ?? `Day ${s.dayOfWeek}`
+                            WEEKDAY_NAMES[group.dayOfWeek] ?? `Day ${group.dayOfWeek}`
                           } schedule window`}
-                          aria-describedby={`delete-desc-${s.id}`}
-                          data-testid={`schedule-delete-confirm-${s.id}`}
+                          aria-describedby={`delete-desc-${group.primaryId}`}
+                          data-testid={`schedule-delete-confirm-${group.primaryId}`}
                           onKeyDown={(e) => {
                             if (e.key === "Escape") {
                               e.stopPropagation();
@@ -2121,13 +2341,13 @@ export function FacilityDetail() {
                             </div>
                             <div className="flex-1">
                               <h3
-                                id={`delete-title-${s.id}`}
+                                id={`delete-title-${group.primaryId}`}
                                 className="text-xs font-semibold uppercase tracking-wider text-red-800"
                               >
                                 Confirm Schedule Window Deletion
                               </h3>
                               <p
-                                id={`delete-desc-${s.id}`}
+                                id={`delete-desc-${group.primaryId}`}
                                 className="mt-1 text-xs text-gray-700"
                               >
                                 Are you sure you want to permanently delete this weekly schedule window for{" "}
@@ -2140,7 +2360,7 @@ export function FacilityDetail() {
                                     Weekday
                                   </span>
                                   <span className="font-semibold text-[var(--color-navy)]">
-                                    {WEEKDAY_NAMES[s.dayOfWeek] ?? `Day ${s.dayOfWeek}`}
+                                    {WEEKDAY_NAMES[group.dayOfWeek] ?? `Day ${group.dayOfWeek}`}
                                   </span>
                                 </div>
                                 <div>
@@ -2148,7 +2368,7 @@ export function FacilityDetail() {
                                     Operating Time (PKT)
                                   </span>
                                   <span className="font-mono font-semibold text-[var(--color-navy)]">
-                                    {formatTimeRange(s.startTime, s.endTime)}
+                                    {formatTimeRange(group.startTime, group.endTime)}
                                   </span>
                                 </div>
                                 <div>
@@ -2156,7 +2376,7 @@ export function FacilityDetail() {
                                     Audience
                                   </span>
                                   <span className="font-semibold text-[var(--color-navy)]">
-                                    {AUDIENCE_LABELS[s.audience] ?? s.audience}
+                                    {group.audienceText}
                                   </span>
                                 </div>
                               </div>
@@ -2193,7 +2413,7 @@ export function FacilityDetail() {
                                 <button
                                   ref={cancelButtonRef}
                                   type="button"
-                                  id={`cancel-delete-btn-${s.id}`}
+                                  id={`cancel-delete-btn-${group.primaryId}`}
                                   autoFocus
                                   disabled={isDeleting}
                                   onClick={cancelDeleting}
@@ -2204,9 +2424,9 @@ export function FacilityDetail() {
                                 </button>
                                 <button
                                   type="button"
-                                  id={`confirm-delete-btn-${s.id}`}
+                                  id={`confirm-delete-btn-${group.primaryId}`}
                                   disabled={isDeleting}
-                                  onClick={() => handleConfirmDelete(s.id)}
+                                  onClick={() => handleConfirmDelete(group.primaryId, group)}
                                   aria-label="Confirm delete schedule window"
                                   className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
                                 >
@@ -2226,59 +2446,43 @@ export function FacilityDetail() {
                       );
                     }
 
-                    const isConcurrent = facility.schedules.some(
-                      (other) =>
-                        other.id !== s.id &&
-                        other.dayOfWeek === s.dayOfWeek &&
-                        other.startTime === s.startTime &&
-                        other.endTime === s.endTime
-                    );
-
                     return (
                       <div
-                        key={s.id}
-                        data-testid={`schedule-row-${s.id}`}
+                        key={group.key}
+                        data-testid={`schedule-row-${group.primaryId}`}
                         className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between"
                       >
+                        {/* Hidden anchors for secondary schedules in the group */}
+                        {group.schedules.slice(1).map((sec) => (
+                          <span
+                            key={sec.id}
+                            data-testid={`schedule-row-${sec.id}`}
+                            className="sr-only"
+                            aria-hidden="true"
+                          />
+                        ))}
+
                         <div className="flex items-center gap-3">
                           <span className="w-24 flex-shrink-0 rounded-md bg-white px-2.5 py-1 text-center text-xs font-semibold text-[var(--color-navy)] shadow-xs">
-                            {WEEKDAY_NAMES[s.dayOfWeek] ?? `Day ${s.dayOfWeek}`}
+                            {WEEKDAY_NAMES[group.dayOfWeek] ?? `Day ${group.dayOfWeek}`}
                           </span>
                           <span className="text-sm font-semibold text-[var(--color-navy)]">
-                            {formatTimeRange(s.startTime, s.endTime)}
+                            {formatTimeRange(group.startTime, group.endTime)}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          {s.dayOfWeek === todayDay && isWindowActiveNow(s.startTime, s.endTime) && (
-                            <span
-                              data-testid={`open-now-badge-${s.id}`}
-                              className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700"
-                            >
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              Open Now
-                            </span>
-                          )}
-                          {isConcurrent && (
-                            <span
-                              data-testid={`shared-slot-badge-${s.id}`}
-                              title="This time slot is shared concurrently with other audience cohorts"
-                              className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 text-[10px] font-semibold text-indigo-700"
-                            >
-                              Shared Slot
-                            </span>
-                          )}
                           <span className="rounded-full bg-[var(--color-border)]/60 px-3 py-0.5 text-xs font-medium text-[var(--color-navy)]">
-                            {AUDIENCE_LABELS[s.audience] ?? s.audience}
+                            {group.audienceText}
                           </span>
                           {canEditSchedule && (
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
-                                id={`edit-btn-${s.id}`}
+                                id={`edit-btn-${group.primaryId}`}
                                 disabled={isSaving || isDeleting || isSavingAdd}
-                                onClick={() => startEditing(s)}
+                                onClick={() => startEditing(group)}
                                 aria-label={`Edit ${
-                                  WEEKDAY_NAMES[s.dayOfWeek] ?? `Day ${s.dayOfWeek}`
+                                  WEEKDAY_NAMES[group.dayOfWeek] ?? `Day ${group.dayOfWeek}`
                                 } schedule window`}
                                 className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-white px-2.5 py-1 text-xs font-semibold text-[var(--color-navy)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-maroon)] disabled:opacity-50"
                               >
@@ -2287,11 +2491,11 @@ export function FacilityDetail() {
                               </button>
                               <button
                                 type="button"
-                                id={`delete-btn-${s.id}`}
+                                id={`delete-btn-${group.primaryId}`}
                                 disabled={isSaving || isDeleting || isSavingAdd}
-                                onClick={() => startDeleting(s)}
+                                onClick={() => startDeleting(group)}
                                 aria-label={`Delete ${
-                                  WEEKDAY_NAMES[s.dayOfWeek] ?? `Day ${s.dayOfWeek}`
+                                  WEEKDAY_NAMES[group.dayOfWeek] ?? `Day ${group.dayOfWeek}`
                                 } schedule window`}
                                 className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 hover:text-red-800 disabled:opacity-50"
                               >
@@ -2307,6 +2511,18 @@ export function FacilityDetail() {
                 </div>
               )}
             </section>
+
+            {facility && canEditSchedule && (
+              <EditFacilityModal
+                isOpen={isEditFacilityModalOpen}
+                facility={facility}
+                onClose={() => setIsEditFacilityModalOpen(false)}
+                onUpdated={(updated) => {
+                  setFacility(updated);
+                  setSuccessMessage("Facility details updated successfully.");
+                }}
+              />
+            )}
           </div>
         )}
       </main>

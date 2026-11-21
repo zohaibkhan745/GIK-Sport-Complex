@@ -3,8 +3,8 @@ import type { LegacyFacility } from "../types";
 export const FACILITIES: LegacyFacility[] = [
   {
     slug: "glass-padel-courts",
-    name: "GIKI Glass Padel Courts",
-    shortName: "Padel Courts",
+    name: "Padel Court",
+    shortName: "Padel",
     tagline: "Court 1 & 2 — panoramic tempered glass, synthetic turf",
     description:
       "Panoramic tempered glass, synthetic turf, and 800 Lux LED tournament floodlights across two championship-grade courts.",
@@ -24,8 +24,8 @@ export const FACILITIES: LegacyFacility[] = [
   },
   {
     slug: "badminton-championship-hall",
-    name: "Indoor Badminton Championship Hall",
-    shortName: "Badminton Hall",
+    name: "Badminton Courts",
+    shortName: "Badminton",
     tagline: "4 BWF-certified teakwood sprung courts, climate cooled",
     description:
       "Four BWF-certified teakwood sprung courts with climate cooling, built to host championship-standard play year-round.",
@@ -45,8 +45,8 @@ export const FACILITIES: LegacyFacility[] = [
   },
   {
     slug: "glass-back-squash-complex",
-    name: "Glass-Back Squash Complex",
-    shortName: "Squash Complex",
+    name: "Squash",
+    shortName: "Squash",
     tagline: "Courts 1-3 — Junckers beech flooring, electronic scoring",
     description:
       "Three glass-back courts with Junckers beech flooring and electronic score monitors for tournament-grade matches.",
@@ -66,8 +66,8 @@ export const FACILITIES: LegacyFacility[] = [
   },
   {
     slug: "hard-tennis-courts",
-    name: "Hard Tennis Courts",
-    shortName: "Tennis Courts",
+    name: "Tennis Courts",
+    shortName: "Tennis",
     tagline: "Courts 1 & 2 — US Open-grade acrylic cushioned hard courts",
     description:
       "Two US Open-grade acrylic cushioned hard courts, resurfaced for consistent bounce and year-round play.",
@@ -87,28 +87,28 @@ export const FACILITIES: LegacyFacility[] = [
   },
   {
     slug: "floodlit-futsal-court",
-    name: "GIKI Floodlit Futsal Court",
-    shortName: "Futsal Court",
-    tagline: "FIFA Quality artificial turf with rebound netting",
+    name: "Outdoor BasketBall Court",
+    shortName: "BasketBall",
+    tagline: "Regulation outdoor basketball court with tournament floodlighting",
     description:
-      "A floodlit, FIFA Quality artificial turf pitch with rebound netting, built for fast, physical five-a-side football.",
+      "Floodlit outdoor basketball court with regulation hoops, rebound backboards, and high-traction sports surfacing.",
     icon: "goal",
     meta: [
       { icon: "clock", label: "Open 4pm - 11pm" },
-      { icon: "users", label: "10-a-side capacity" },
-      { icon: "shield", label: "Floodlit, FIFA Quality turf" },
+      { icon: "users", label: "Full-court capacity" },
+      { icon: "shield", label: "Floodlit sports surface" },
     ],
     schedule: [
       { days: "Mon - Fri", activity: "Open booking, 4-7pm" },
       { days: "Tue / Thu", activity: "Inter-hostel league, 7-9pm" },
       { days: "Saturday", activity: "Weekend knockout cup" },
     ],
-    coach: { name: "Coach Fahad Malik", title: "Futsal coordinator", initials: "FM" },
+    coach: { name: "Coach Fahad Malik", title: "Basketball coordinator", initials: "FM" },
     galleryCount: 3,
   },
   {
     slug: "table-tennis-hall",
-    name: "Table Tennis Hall",
+    name: "Table Tennis",
     shortName: "Table Tennis",
     tagline: "6 ITTF-approved Butterfly tournament tables",
     description:
@@ -128,8 +128,8 @@ export const FACILITIES: LegacyFacility[] = [
   },
   {
     slug: "central-fitness-gym",
-    name: "GIKI Central Fitness & Strength Gym",
-    shortName: "Fitness Gym",
+    name: "Gym",
+    shortName: "Gym",
     tagline: "Olympic racks, cardio zone, functional rigs",
     description:
       "A full strength-and-conditioning floor with Olympic racks, a dedicated cardio zone, and functional training rigs.",
@@ -149,7 +149,7 @@ export const FACILITIES: LegacyFacility[] = [
   },
   {
     slug: "semi-olympic-swimming-pool",
-    name: "Semi-Olympic Swimming Pool",
+    name: "Swimming Pool",
     shortName: "Swimming Pool",
     tagline: "25m, 6-lane, temperature-controlled, ozone filtration",
     description:
@@ -166,6 +166,66 @@ export const FACILITIES: LegacyFacility[] = [
       { days: "Saturday", activity: "Inter-batch gala" },
     ],
     coach: { name: "Coach Ahmed Khalid", title: "National-level swim coach, 12 years", initials: "AK" },
+    galleryCount: 3,
+  },
+  {
+    slug: "snooker",
+    name: "Snooker",
+    shortName: "Snooker",
+    tagline: "Championship 12ft Riley snooker tables with Strachan cloth",
+    description:
+      "Championship-standard Riley full-size 12ft snooker tables with West of England Strachan cloth, tournament lighting, and cues available for students, faculty, and staff.",
+    icon: "target",
+    meta: [
+      { icon: "clock", label: "Open 10am - 10pm" },
+      { icon: "users", label: "3 tables" },
+      { icon: "shield", label: "Tournament lighting" },
+    ],
+    schedule: [
+      { days: "Mon - Fri", activity: "Student sessions, 10am - 5pm" },
+      { days: "Mon - Fri", activity: "Faculty & Staff, 5pm - 8pm" },
+      { days: "Sat - Sun", activity: "Open play, 10am - 10pm" },
+    ],
+    galleryCount: 2,
+  },
+  {
+    slug: "indoor-basketball-court",
+    name: "Indoor BasketBall Court",
+    shortName: "Basketball",
+    tagline: "Full-size hardwood indoor basketball court with sprung maple flooring",
+    description:
+      "Full-size hardwood indoor basketball court equipped with competition glass backboards, sprung maple flooring, electronic scoreboard, and spectator stands.",
+    icon: "goal",
+    meta: [
+      { icon: "clock", label: "Open 6am - 9pm" },
+      { icon: "users", label: "Full-court capacity" },
+      { icon: "shield", label: "Hardwood sprung court" },
+    ],
+    schedule: [
+      { days: "Mon / Wed / Fri", activity: "Student training, 6-11am & 4-8pm" },
+      { days: "Tue / Thu", activity: "Women-only session, 4-6pm" },
+      { days: "Sat - Sun", activity: "Open weekend play, 8am - 8pm" },
+    ],
+    galleryCount: 3,
+  },
+  {
+    slug: "indoor-volleyball-court",
+    name: "Indoor VolleyBall Court",
+    shortName: "Volleyball",
+    tagline: "Championship Taraflex sports flooring with spectator gallery",
+    description:
+      "Championship-standard indoor volleyball court with competition Taraflex sports flooring, adjustable net antennas, and spectator gallery.",
+    icon: "circle",
+    meta: [
+      { icon: "clock", label: "Open 7am - 9pm" },
+      { icon: "users", label: "Court capacity 12" },
+      { icon: "shield", label: "Taraflex sports flooring" },
+    ],
+    schedule: [
+      { days: "Mon / Wed / Fri", activity: "Student training, 7-11am & 4-8pm" },
+      { days: "Tue / Thu", activity: "Women-only session, 4-6pm" },
+      { days: "Sat - Sun", activity: "General community, 9am - 3pm" },
+    ],
     galleryCount: 3,
   },
 ];

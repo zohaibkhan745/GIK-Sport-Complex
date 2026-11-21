@@ -9,9 +9,8 @@ const mockFacilities: Facility[] = [
   {
     id: "fac-padel",
     slug: "glass-padel-courts",
-    name: "GIKI Glass Padel Courts",
+    name: "Padel",
     description: "Championship glass courts with floodlights",
-    location: "Outdoor Courts North",
     status: "active",
     schedules: [
       {
@@ -33,9 +32,8 @@ const mockFacilities: Facility[] = [
   {
     id: "fac-gym",
     slug: "central-fitness-gym",
-    name: "GIKI Central Fitness & Strength Gym",
+    name: "Gymnasium",
     description: "Olympic racks, cardio zone, functional strength rigs",
-    location: "Ground Floor East",
     status: "active",
     schedules: [
       {
@@ -57,9 +55,8 @@ const mockFacilities: Facility[] = [
   {
     id: "fac-badminton",
     slug: "badminton-championship-hall",
-    name: "Indoor Badminton Championship Hall",
+    name: "Badminton",
     description: "Teakwood sprung courts with climate cooling",
-    location: "Level 1 Hall",
     status: "active",
     schedules: [
       {
@@ -74,9 +71,8 @@ const mockFacilities: Facility[] = [
   {
     id: "fac-pool",
     slug: "semi-olympic-swimming-pool",
-    name: "Semi-Olympic Swimming Pool",
+    name: "Swimming Pool",
     description: "25m 6-lane ozone filtered pool",
-    location: "Aquatic Pavilion",
     status: "active",
     schedules: [
       {
@@ -98,7 +94,7 @@ describe("FacilityCard Component (Access Model Specialization)", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText("GIKI Glass Padel Courts")).toBeInTheDocument();
+    expect(screen.getByText("Padel")).toBeInTheDocument();
     expect(screen.queryByText("Online Booking")).not.toBeInTheDocument();
     expect(screen.queryByText("Women-Only")).not.toBeInTheDocument();
 
@@ -108,7 +104,7 @@ describe("FacilityCard Component (Access Model Specialization)", () => {
       "/padel?facility=glass-padel-courts"
     );
 
-    const titleLink = screen.getByText("GIKI Glass Padel Courts").closest("a");
+    const titleLink = screen.getByText("Padel").closest("a");
     expect(titleLink).toHaveAttribute("href", "/facilities/glass-padel-courts");
   });
 
@@ -120,7 +116,7 @@ describe("FacilityCard Component (Access Model Specialization)", () => {
     );
 
     expect(
-      screen.getByText("GIKI Central Fitness & Strength Gym")
+      screen.getByText("Gymnasium")
     ).toBeInTheDocument();
     expect(screen.queryByText("30-Day Pass")).not.toBeInTheDocument();
 
@@ -128,7 +124,7 @@ describe("FacilityCard Component (Access Model Specialization)", () => {
     expect(passLink).toHaveAttribute("href", "/membership");
 
     const titleLink = screen
-      .getByText("GIKI Central Fitness & Strength Gym")
+      .getByText("Gymnasium")
       .closest("a");
     expect(titleLink).toHaveAttribute("href", "/facilities/central-fitness-gym");
   });
@@ -141,7 +137,7 @@ describe("FacilityCard Component (Access Model Specialization)", () => {
     );
 
     expect(
-      screen.getByText("Indoor Badminton Championship Hall")
+      screen.getByText("Badminton")
     ).toBeInTheDocument();
     const scheduleLink = screen.getByRole("link", { name: /view schedule/i });
     expect(scheduleLink).toHaveAttribute(
@@ -184,10 +180,10 @@ describe("FacilitiesGrid Component (Clean Streamlined Grid)", () => {
     );
 
     // Verify all 4 mock facilities render directly
-    expect(screen.getByText("GIKI Glass Padel Courts")).toBeInTheDocument();
-    expect(screen.getByText("GIKI Central Fitness & Strength Gym")).toBeInTheDocument();
-    expect(screen.getByText("Indoor Badminton Championship Hall")).toBeInTheDocument();
-    expect(screen.getByText("Semi-Olympic Swimming Pool")).toBeInTheDocument();
+    expect(screen.getByText("Padel")).toBeInTheDocument();
+    expect(screen.getByText("Gymnasium")).toBeInTheDocument();
+    expect(screen.getByText("Badminton")).toBeInTheDocument();
+    expect(screen.getByText("Swimming Pool")).toBeInTheDocument();
 
     // Verify search and filter elements do not exist
     expect(screen.queryByPlaceholderText(/search facilities/i)).not.toBeInTheDocument();

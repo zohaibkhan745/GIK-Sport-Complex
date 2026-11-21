@@ -44,6 +44,25 @@ type SummaryResponse struct {
 	History           []*MembershipResponse `json:"history"`
 }
 
+// PlanResponse formats the gym membership plan for clients.
+type PlanResponse struct {
+	ID           string `json:"id"`
+	PlanCode     string `json:"planCode"`
+	Name         string `json:"name"`
+	DurationDays int    `json:"durationDays"`
+	PricePaisa   int64  `json:"pricePaisa"`
+	IsActive     bool   `json:"isActive"`
+	Description  string `json:"description"`
+}
+
+// UpdatePlanRequest defines the payload for directors to edit pass duration and fee.
+type UpdatePlanRequest struct {
+	Name         string `json:"name"`
+	DurationDays int    `json:"durationDays"`
+	PricePaisa   int64  `json:"pricePaisa"`
+	Description  string `json:"description"`
+}
+
 // Handler provides HTTP endpoints for gym membership operations.
 type Handler struct {
 	service      *Service
@@ -68,13 +87,34 @@ func (h *Handler) RegisterRoutes(
 	requireAuth fiber.Handler,
 	requireStaff fiber.Handler,
 ) {
+	// Public endpoint to view current plan pricing & duration
+	router.Get("/membership/plan", h.GetPlan)
+	router.Get("/memberships/plan", h.GetPlan)
+
 	// Authenticated student/faculty/staff endpoints
-	router.Get("/memberships/me", requireOrigin, requireAuth, h.GetMySummary)
+	router.Get("/memberships/me", requireAuth, h.GetMySummary)
 	router.Post("/memberships/purchase", requireOrigin, requireAuth, h.PurchasePass)
 	router.Post("/memberships", requireOrigin, requireAuth, h.PurchasePass)
 
 	// Administrative staff endpoints
-	router.Get("/admin/memberships", requireOrigin, requireAuth, requireStaff, h.ListMembershipsAdmin)
+	router.Get("/admin/memberships", requireAuth, requireStaff, h.ListMembershipsAdmin)
+	router.Put("/admin/membership/plan", requireOrigin, requireAuth, requireStaff, h.UpdatePlan)
+	router.Patch("/admin/membership/plan", requireOrigin, requireAuth, requireStaff, h.UpdatePlan)
+}
+
+func toPlanResponse(p *GymMembershipPlan) *PlanResponse {
+	if p == nil {
+		return nil
+	}
+	return &PlanResponse{
+		ID:           p.ID.String(),
+		PlanCode:     p.PlanCode,
+		Name:         p.Name,
+		DurationDays: p.DurationDays,
+		PricePaisa:   p.PricePaisa,
+		IsActive:     p.IsActive,
+		Description:  p.Description,
+	}
 }
 
 func toResponse(m *Membership) *MembershipResponse {
@@ -220,4 +260,64 @@ func (h *Handler) ListMembershipsAdmin(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(resp)
+}
+
+// GetPlan handles GET /api/membership/plan (Public).
+func (h *Handler) GetPlan(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(c.Context(), h.queryTimeout)
+	defer cancel()
+
+	plan, err := h.service.GetDefaultPlan(ctx)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to retrieve membership plan",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(toPlanResponse(plan))
+}
+
+// UpdatePlan handles PUT/PATCH /api/admin/membership/plan (Sports Director / Super Admin).
+func (h *Handler) UpdatePlan(c *fiber.Ctx) error {
+	principal, ok := authentication.GetPrincipal(c)
+	if !ok || principal == nil || principal.User == nil || principal.User.ID == uuid.Nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized: authentication required",
+		})
+	}
+
+	var req UpdatePlanRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid JSON request payload",
+		})
+	}
+
+	if req.DurationDays <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "membership duration must be at least 1 day",
+		})
+	}
+	if req.PricePaisa < 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "membership fee cannot be negative",
+		})
+	}
+
+	ctx, cancel := context.WithTimeout(c.Context(), h.queryTimeout)
+	defer cancel()
+
+	updated, err := h.service.UpdatePlan(ctx, string(PlanTypeStandard30Day), req.Name, req.DurationDays, req.PricePaisa, req.Description, principal.User.ID)
+	if err != nil {
+		if errors.Is(err, ErrPlanNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "membership plan not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to update membership plan",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(toPlanResponse(updated))
 }

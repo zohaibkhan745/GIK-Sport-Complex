@@ -22,6 +22,12 @@ type Repository interface {
 	ListMembershipsByUserID(ctx context.Context, userID uuid.UUID) ([]*Membership, error)
 	ListAllMemberships(ctx context.Context, limit, offset int) ([]*Membership, error)
 	GetMembershipByID(ctx context.Context, id uuid.UUID) (*Membership, error)
+	GetActivePlan(ctx context.Context, planCode string) (*GymMembershipPlan, error)
+	GetActivePlanTx(ctx context.Context, tx pgx.Tx, planCode string) (*GymMembershipPlan, error)
+	GetDefaultPlan(ctx context.Context) (*GymMembershipPlan, error)
+	GetDefaultPlanTx(ctx context.Context, tx pgx.Tx) (*GymMembershipPlan, error)
+	UpdatePlan(ctx context.Context, planCode string, name string, durationDays int, pricePaisa int64, description string, updatedBy uuid.UUID) (*GymMembershipPlan, error)
+	ListPlans(ctx context.Context) ([]*GymMembershipPlan, error)
 }
 
 // PostgresRepository implements Repository using PostgreSQL.
@@ -149,7 +155,11 @@ func (r *PostgresRepository) RecordAuditLogTx(ctx context.Context, tx pgx.Tx, ac
 	if err != nil {
 		detailsBytes = []byte("{}")
 	}
-	_, err = tx.Exec(ctx, query, actorID, action, targetType, targetID, detailsBytes)
+	if tx != nil {
+		_, err = tx.Exec(ctx, query, actorID, action, targetType, targetID, detailsBytes)
+	} else {
+		_, err = r.pool.Exec(ctx, query, actorID, action, targetType, targetID, detailsBytes)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to write audit log: %w", err)
 	}
@@ -274,4 +284,197 @@ func (r *PostgresRepository) GetMembershipByID(ctx context.Context, id uuid.UUID
 		return nil, fmt.Errorf("failed to get membership %s: %w", id, err)
 	}
 	return &m, nil
+}
+
+// GetDefaultPlan retrieves the primary active gym membership plan.
+func (r *PostgresRepository) GetDefaultPlan(ctx context.Context) (*GymMembershipPlan, error) {
+	const query = `
+		SELECT id, plan_code, name, duration_days, price_paisa, is_active, COALESCE(description, ''), created_at, updated_at, updated_by
+		FROM giki_sports.gym_membership_plans
+		WHERE is_active = true
+		ORDER BY created_at ASC
+		LIMIT 1;
+	`
+	var p GymMembershipPlan
+	err := r.pool.QueryRow(ctx, query).Scan(
+		&p.ID,
+		&p.PlanCode,
+		&p.Name,
+		&p.DurationDays,
+		&p.PricePaisa,
+		&p.IsActive,
+		&p.Description,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+		&p.UpdatedBy,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrPlanNotFound
+		}
+		return nil, fmt.Errorf("failed to query default plan: %w", err)
+	}
+	return &p, nil
+}
+
+// GetDefaultPlanTx retrieves the primary active gym membership plan within an open transaction.
+func (r *PostgresRepository) GetDefaultPlanTx(ctx context.Context, tx pgx.Tx) (*GymMembershipPlan, error) {
+	const query = `
+		SELECT id, plan_code, name, duration_days, price_paisa, is_active, COALESCE(description, ''), created_at, updated_at, updated_by
+		FROM giki_sports.gym_membership_plans
+		WHERE is_active = true
+		ORDER BY created_at ASC
+		LIMIT 1;
+	`
+	var p GymMembershipPlan
+	err := tx.QueryRow(ctx, query).Scan(
+		&p.ID,
+		&p.PlanCode,
+		&p.Name,
+		&p.DurationDays,
+		&p.PricePaisa,
+		&p.IsActive,
+		&p.Description,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+		&p.UpdatedBy,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrPlanNotFound
+		}
+		return nil, fmt.Errorf("failed to query default plan tx: %w", err)
+	}
+	return &p, nil
+}
+
+// GetActivePlan retrieves an active plan by its plan code.
+func (r *PostgresRepository) GetActivePlan(ctx context.Context, planCode string) (*GymMembershipPlan, error) {
+	const query = `
+		SELECT id, plan_code, name, duration_days, price_paisa, is_active, COALESCE(description, ''), created_at, updated_at, updated_by
+		FROM giki_sports.gym_membership_plans
+		WHERE plan_code = $1 AND is_active = true;
+	`
+	var p GymMembershipPlan
+	err := r.pool.QueryRow(ctx, query, planCode).Scan(
+		&p.ID,
+		&p.PlanCode,
+		&p.Name,
+		&p.DurationDays,
+		&p.PricePaisa,
+		&p.IsActive,
+		&p.Description,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+		&p.UpdatedBy,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrPlanNotFound
+		}
+		return nil, fmt.Errorf("failed to query plan %s: %w", planCode, err)
+	}
+	return &p, nil
+}
+
+// GetActivePlanTx retrieves an active plan by code inside a transaction.
+func (r *PostgresRepository) GetActivePlanTx(ctx context.Context, tx pgx.Tx, planCode string) (*GymMembershipPlan, error) {
+	const query = `
+		SELECT id, plan_code, name, duration_days, price_paisa, is_active, COALESCE(description, ''), created_at, updated_at, updated_by
+		FROM giki_sports.gym_membership_plans
+		WHERE plan_code = $1 AND is_active = true;
+	`
+	var p GymMembershipPlan
+	err := tx.QueryRow(ctx, query, planCode).Scan(
+		&p.ID,
+		&p.PlanCode,
+		&p.Name,
+		&p.DurationDays,
+		&p.PricePaisa,
+		&p.IsActive,
+		&p.Description,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+		&p.UpdatedBy,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrPlanNotFound
+		}
+		return nil, fmt.Errorf("failed to query plan tx %s: %w", planCode, err)
+	}
+	return &p, nil
+}
+
+// UpdatePlan updates name, duration, price, and description for a plan code.
+func (r *PostgresRepository) UpdatePlan(ctx context.Context, planCode string, name string, durationDays int, pricePaisa int64, description string, updatedBy uuid.UUID) (*GymMembershipPlan, error) {
+	const query = `
+		UPDATE giki_sports.gym_membership_plans
+		SET name = CASE WHEN length(trim($2)) > 0 THEN trim($2) ELSE name END,
+		    duration_days = $3,
+		    price_paisa = $4,
+		    description = $5,
+		    updated_at = now(),
+		    updated_by = $6
+		WHERE plan_code = $1
+		RETURNING id, plan_code, name, duration_days, price_paisa, is_active, COALESCE(description, ''), created_at, updated_at, updated_by;
+	`
+	var p GymMembershipPlan
+	err := r.pool.QueryRow(ctx, query, planCode, name, durationDays, pricePaisa, description, updatedBy).Scan(
+		&p.ID,
+		&p.PlanCode,
+		&p.Name,
+		&p.DurationDays,
+		&p.PricePaisa,
+		&p.IsActive,
+		&p.Description,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+		&p.UpdatedBy,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrPlanNotFound
+		}
+		return nil, fmt.Errorf("failed to update plan %s: %w", planCode, err)
+	}
+	return &p, nil
+}
+
+// ListPlans lists all active membership plans.
+func (r *PostgresRepository) ListPlans(ctx context.Context) ([]*GymMembershipPlan, error) {
+	const query = `
+		SELECT id, plan_code, name, duration_days, price_paisa, is_active, COALESCE(description, ''), created_at, updated_at, updated_by
+		FROM giki_sports.gym_membership_plans
+		ORDER BY created_at ASC;
+	`
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list plans: %w", err)
+	}
+	defer rows.Close()
+
+	var result []*GymMembershipPlan
+	for rows.Next() {
+		var p GymMembershipPlan
+		if err := rows.Scan(
+			&p.ID,
+			&p.PlanCode,
+			&p.Name,
+			&p.DurationDays,
+			&p.PricePaisa,
+			&p.IsActive,
+			&p.Description,
+			&p.CreatedAt,
+			&p.UpdatedAt,
+			&p.UpdatedBy,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan plan: %w", err)
+		}
+		result = append(result, &p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+	return result, nil
 }

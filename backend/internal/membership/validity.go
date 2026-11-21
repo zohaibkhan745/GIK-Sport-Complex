@@ -7,8 +7,16 @@ import (
 
 // CalculateTerm calculates the strict 30-day half-open term [T_start, T_start + 30 days).
 func CalculateTerm(startTime time.Time) (time.Time, time.Time) {
+	return CalculateTermWithDuration(startTime, PassDuration)
+}
+
+// CalculateTermWithDuration calculates the term with a customizable plan duration.
+func CalculateTermWithDuration(startTime time.Time, duration time.Duration) (time.Time, time.Time) {
+	if duration <= 0 {
+		duration = PassDuration
+	}
 	start := startTime.UTC().Truncate(time.Second)
-	end := start.Add(PassDuration)
+	end := start.Add(duration)
 	return start, end
 }
 
@@ -18,16 +26,24 @@ func CalculateTerm(startTime time.Time) (time.Time, time.Time) {
 // existingExpiry and extends for 30 days, creating an uninterrupted contiguous active window.
 // If existingExpiry is nil or in the past (already expired), the new 30-day term starts immediately at renewalTime.
 func CalculateRenewalTerm(existingExpiry *time.Time, renewalTime time.Time) (time.Time, time.Time) {
+	return CalculateRenewalTermWithDuration(existingExpiry, renewalTime, PassDuration)
+}
+
+// CalculateRenewalTermWithDuration enforces the renewal rule with a customizable plan duration.
+func CalculateRenewalTermWithDuration(existingExpiry *time.Time, renewalTime time.Time, duration time.Duration) (time.Time, time.Time) {
+	if duration <= 0 {
+		duration = PassDuration
+	}
 	renewal := renewalTime.UTC().Truncate(time.Second)
 
 	if existingExpiry == nil || existingExpiry.Before(renewal) {
 		start := renewal
-		end := start.Add(PassDuration)
+		end := start.Add(duration)
 		return start, end
 	}
 
 	start := existingExpiry.UTC().Truncate(time.Second)
-	end := start.Add(PassDuration)
+	end := start.Add(duration)
 	return start, end
 }
 

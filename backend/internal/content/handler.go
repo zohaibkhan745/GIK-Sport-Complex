@@ -60,6 +60,7 @@ func (h *Handler) RegisterDraftRoutes(
 	router.Get("/admin/content/drafts/:id", requireAuth, requireRole, h.GetDraftByID)
 	router.Put("/admin/content/drafts/:id", requireOrigin, requireAuth, requireRole, h.UpdateDraft)
 	router.Post("/admin/content/drafts/:id/publish", requireOrigin, requireAuth, requireRole, h.PublishDraft)
+	router.Post("/admin/content/upload", requireOrigin, requireAuth, requireRole, h.UploadImages)
 }
 
 // RegisterDraftListRoute mounts only the protected GET /admin/content/drafts endpoint.
@@ -206,9 +207,10 @@ func (h *Handler) CreateDraft(c *fiber.Ctx) error {
 
 	// 4. Map to domain input and validate contract rules
 	input := CreateDraftInput{
-		Kind:    Kind(req.Kind),
-		Title:   req.Title,
-		Content: req.Content,
+		Kind:      Kind(req.Kind),
+		Title:     req.Title,
+		Content:   req.Content,
+		ImageURLs: req.ImageURLs,
 	}
 	if err := input.Validate(); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
@@ -358,8 +360,9 @@ func (h *Handler) UpdateDraft(c *fiber.Ctx) error {
 
 	// 4. Map to domain input and validate contract rules
 	input := UpdateDraftInput{
-		Title:   req.Title,
-		Content: req.Content,
+		Title:     req.Title,
+		Content:   req.Content,
+		ImageURLs: req.ImageURLs,
 	}
 	if err := input.Validate(); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{

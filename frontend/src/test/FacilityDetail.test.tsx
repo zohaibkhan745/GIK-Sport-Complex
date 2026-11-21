@@ -22,6 +22,8 @@ vi.mock("../api", () => {
       updateSchedule: vi.fn(),
       deleteSchedule: vi.fn(),
       createSchedule: vi.fn(),
+      updateFacility: vi.fn(),
+      updateFacilityDescription: vi.fn(),
     },
     ApiError: MockApiError,
   };
@@ -33,7 +35,6 @@ describe("Facility Detail Page Component", () => {
     slug: "demo-badminton-court",
     name: "[Demo] Campus Badminton Court",
     description: "Synthetic test description for demonstration court",
-    location: "Wing B, Level 1",
     status: "active",
     schedules: [
       {
@@ -58,7 +59,6 @@ describe("Facility Detail Page Component", () => {
     slug: "demo-table-tennis",
     name: "[Demo] Table Tennis Hall",
     description: null,
-    location: null,
     status: "maintenance",
     schedules: [],
   };
@@ -107,7 +107,7 @@ describe("Facility Detail Page Component", () => {
     expect(screen.getByTestId("home-view")).toBeInTheDocument();
   });
 
-  it("renders complete facility details, structured weekly schedules, and Asia/Karachi time notes", async () => {
+  it("renders complete facility details and structured weekly schedules", async () => {
     vi.mocked(api.getFacility).mockResolvedValue(completeFacility);
 
     renderWithRoute("/facilities/demo-badminton-court");
@@ -130,24 +130,24 @@ describe("Facility Detail Page Component", () => {
 
     // Verify Schedule items & weekday translation
     expect(screen.getByText("Monday")).toBeInTheDocument();
-    expect(screen.getByText("09:00 – 12:00")).toBeInTheDocument();
+    expect(screen.getByText("9:00 AM – 12:00 PM")).toBeInTheDocument();
     expect(screen.getByText("Students")).toBeInTheDocument();
 
     // Verify Friday schedule with 24:00:00 midnight end-of-day
     expect(screen.getByText("Friday")).toBeInTheDocument();
-    expect(screen.getByText("22:00 – 24:00 (Midnight)")).toBeInTheDocument();
+    expect(screen.getByText("10:00 PM – 12:00 AM (Midnight)")).toBeInTheDocument();
     expect(screen.getByText("Faculty")).toBeInTheDocument();
 
-    // Verify timezone label
+    // Verify obsolete timezone disclaimer was removed
     expect(
-      screen.getByText(/Times displayed in local Asia\/Karachi/i)
-    ).toBeInTheDocument();
+      screen.queryByText(/Times displayed in local Asia\/Karachi/i)
+    ).not.toBeInTheDocument();
 
     // Verify nonfunctional booking button was removed
     expect(screen.queryByText(/Book a session/i)).not.toBeInTheDocument();
   });
 
-  it("handles nullable fields (null description and location) and empty schedules gracefully", async () => {
+  it("handles nullable fields (null description) and empty schedules gracefully", async () => {
     vi.mocked(api.getFacility).mockResolvedValue(nullableFacility);
 
     renderWithRoute("/facilities/demo-table-tennis");
@@ -159,9 +159,11 @@ describe("Facility Detail Page Component", () => {
     });
 
     expect(
-      screen.getByText("No description provided for this facility.")
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Location not specified")).not.toBeInTheDocument();
+      screen.queryByTestId("facility-description-text")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No description provided for this facility.")
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("live-operating-status")).toHaveTextContent("Temporarily Closed");
     expect(screen.getByText(/Under scheduled maintenance/)).toBeInTheDocument();
     expect(
@@ -437,7 +439,7 @@ describe("Facility Detail Page Component", () => {
         screen.queryByTestId("schedule-edit-form-sched-1")
       ).not.toBeInTheDocument();
       expect(screen.getByText("Monday")).toBeInTheDocument();
-      expect(screen.getByText("09:00 – 12:00")).toBeInTheDocument();
+      expect(screen.getByText(formatTimeRange("09:00:00", "12:00:00"))).toBeInTheDocument();
       expect(vi.mocked(api.updateSchedule)).not.toHaveBeenCalled();
     });
 
@@ -552,7 +554,7 @@ describe("Facility Detail Page Component", () => {
 
       // Timetable is updated with server canonical values
       expect(screen.getByText("Wednesday")).toBeInTheDocument();
-      expect(screen.getByText("10:00 – 13:00")).toBeInTheDocument();
+      expect(screen.getByText(formatTimeRange("10:00:00", "13:00:00"))).toBeInTheDocument();
       expect(screen.getByText("Women Only")).toBeInTheDocument();
     });
 
@@ -602,7 +604,7 @@ describe("Facility Detail Page Component", () => {
       // Timetable shows 24:00 (Midnight)
       await waitFor(() => {
         expect(
-          screen.getByText("09:00 – 24:00 (Midnight)")
+          screen.getByText(formatTimeRange("09:00:00", "24:00:00"))
         ).toBeInTheDocument();
       });
     });
@@ -1496,7 +1498,6 @@ describe("Facility Detail Page Component", () => {
       slug: "empty-court",
       name: "Empty Sports Court",
       description: "A court with no schedules yet",
-      location: "Hall C",
       status: "active",
       schedules: [],
     };
@@ -2284,11 +2285,8 @@ describe("Facility Detail Page Component", () => {
         target: { value: "10:00:00" },
       });
 
-      // Enable multi-audience
-      fireEvent.click(screen.getByTestId("toggle-multi-audience-checkbox"));
-
-      // Click "Students + Staff/Kids" preset
-      fireEvent.click(screen.getByText("Students + Staff/Kids"));
+      // Target Audiences pills are directly visible; select Staff & Families in addition to Students
+      fireEvent.click(screen.getByTestId("multi-audience-btn-staff"));
 
       // Submit
       fireEvent.click(screen.getByTestId("submit-add-schedule-btn"));
@@ -2319,11 +2317,9 @@ describe("Facility Detail Page Component", () => {
         }
       );
 
-      // Verify both rows appear in the timetable and display Shared Slot badge
+      // Verify row appears in the timetable displaying combined audiences without separate rows or shared slot badge
       expect(screen.getByTestId("schedule-row-sched-multi-student")).toBeInTheDocument();
-      expect(screen.getByTestId("schedule-row-sched-multi-staff")).toBeInTheDocument();
-      expect(screen.getByTestId("shared-slot-badge-sched-multi-student")).toBeInTheDocument();
-      expect(screen.getByTestId("shared-slot-badge-sched-multi-staff")).toBeInTheDocument();
+      expect(screen.getByText("Students + Staff")).toBeInTheDocument();
     });
 
     it("allows an admin editing an existing window to also allocate it to additional audiences", async () => {
@@ -2398,11 +2394,9 @@ describe("Facility Detail Page Component", () => {
         }
       );
 
-      // Both the original student window and the new staff window are rendered with Shared Slot badges
+      // The window is rendered in a single row with combined audiences (Students + Staff)
       expect(screen.getByTestId("schedule-row-sched-1")).toBeInTheDocument();
-      expect(screen.getByTestId("schedule-row-sched-extra-staff")).toBeInTheDocument();
-      expect(screen.getByTestId("shared-slot-badge-sched-1")).toBeInTheDocument();
-      expect(screen.getByTestId("shared-slot-badge-sched-extra-staff")).toBeInTheDocument();
+      expect(screen.getByText("Students + Staff")).toBeInTheDocument();
     });
   });
 
@@ -2422,7 +2416,6 @@ describe("Facility Detail Page Component", () => {
         slug: "f-maint",
         name: "Court Under Maintenance",
         description: null,
-        location: null,
         status: "maintenance",
         schedules: [],
       };
@@ -2439,7 +2432,6 @@ describe("Facility Detail Page Component", () => {
         slug: "f-closed",
         name: "Closed Facility",
         description: null,
-        location: null,
         status: "closed",
         schedules: [],
       };
@@ -2455,7 +2447,6 @@ describe("Facility Detail Page Component", () => {
         slug: "f-empty",
         name: "Empty Facility",
         description: null,
-        location: null,
         status: "active",
         schedules: [],
       };
@@ -2471,7 +2462,6 @@ describe("Facility Detail Page Component", () => {
         slug: "f-active",
         name: "Active Court",
         description: null,
-        location: null,
         status: "active",
         schedules: [
           {
@@ -2498,7 +2488,6 @@ describe("Facility Detail Page Component", () => {
         slug: "f-active",
         name: "Active Court",
         description: null,
-        location: null,
         status: "active",
         schedules: [
           {
@@ -2524,7 +2513,6 @@ describe("Facility Detail Page Component", () => {
         slug: "f-active",
         name: "Active Court",
         description: null,
-        location: null,
         status: "active",
         schedules: [
           {
@@ -2550,7 +2538,6 @@ describe("Facility Detail Page Component", () => {
         slug: "f-active",
         name: "Active Court",
         description: null,
-        location: null,
         status: "active",
         schedules: [
           {
@@ -2568,6 +2555,136 @@ describe("Facility Detail Page Component", () => {
       expect(result.isOpen).toBe(false);
       expect(result.badge).toBe("Closed");
       expect(result.detail).toBe("Opens Friday at 6:00 PM (Open to All)");
+    });
+  });
+
+  describe("Facility Header RBAC & Edit Facility Button", () => {
+    const createMockAuthContext = (user: AuthUser | null): AuthContextType => ({
+      user,
+      isLoading: false,
+      checkError: null,
+      logoutError: null,
+      login: vi.fn(),
+      logout: vi.fn(),
+      retryCheckSession: vi.fn(),
+      clearLogoutError: vi.fn(),
+    });
+
+    const renderWithAuth = (
+      initialPath: string,
+      user: AuthUser | null = null
+    ) => {
+      const target = initialPath.includes("?") ? initialPath : `${initialPath}?day=all`;
+      return render(
+        <AuthContext.Provider value={createMockAuthContext(user)}>
+          <MemoryRouter initialEntries={[target]}>
+            <Routes>
+              <Route path="/facilities/:slug" element={<FacilityDetail />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>
+      );
+    };
+
+    it("hides 'Edit Facility' button for anonymous visitors and student users", async () => {
+      vi.mocked(api.getFacility).mockResolvedValue(completeFacility);
+
+      // Anonymous
+      const { unmount } = renderWithAuth("/facilities/demo-badminton-court", null);
+      await waitFor(() => {
+        expect(screen.getByTestId("facility-detail-content")).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId("edit-facility-btn")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("edit-facility-description-btn")).not.toBeInTheDocument();
+      unmount();
+
+      // Student
+      const studentUser: AuthUser = {
+        id: "usr-student",
+        email: "student@example.test",
+        displayName: "Student User",
+        roles: ["student"],
+      };
+      renderWithAuth("/facilities/demo-badminton-court", studentUser);
+      await waitFor(() => {
+        expect(screen.getByTestId("facility-detail-content")).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId("edit-facility-btn")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("edit-facility-description-btn")).not.toBeInTheDocument();
+    });
+
+    it("displays 'Edit Facility' button for sports_director and opens edit modal on click", async () => {
+      vi.mocked(api.getFacility).mockResolvedValue(completeFacility);
+      const directorUser: AuthUser = {
+        id: "usr-director",
+        email: "director@example.test",
+        displayName: "Director User",
+        roles: ["sports_director"],
+      };
+
+      renderWithAuth("/facilities/demo-badminton-court", directorUser);
+      await waitFor(() => {
+        expect(screen.getByTestId("edit-facility-btn")).toBeInTheDocument();
+      });
+
+      // Quick Description button must no longer exist
+      expect(screen.queryByTestId("edit-facility-description-btn")).not.toBeInTheDocument();
+
+      // Click Edit Facility opens EditFacilityModal
+      fireEvent.click(screen.getByTestId("edit-facility-btn"));
+
+      expect(screen.getByRole("heading", { name: /Edit Facility Details/i })).toBeInTheDocument();
+      expect(screen.getByTestId("edit-facility-name-input")).toHaveValue(completeFacility.name);
+      expect(screen.getByTestId("edit-facility-description-input")).toHaveValue(
+        completeFacility.description
+      );
+
+      // Cancel modal
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("heading", { name: /Edit Facility Details/i })).not.toBeInTheDocument();
+    });
+
+    it("allows Sports Director to edit facility and updates display immediately", async () => {
+      vi.mocked(api.getFacility).mockResolvedValue(completeFacility);
+      const updatedFacility: Facility = {
+        ...completeFacility,
+        description: "Updated championship-standard courts with new LED floodlighting.",
+      };
+      vi.mocked(api.updateFacility).mockResolvedValue(updatedFacility);
+
+      const directorUser: AuthUser = {
+        id: "usr-director",
+        email: "director@example.test",
+        displayName: "Director User",
+        roles: ["sports_director"],
+      };
+
+      renderWithAuth("/facilities/demo-badminton-court", directorUser);
+      await waitFor(() => {
+        expect(screen.getByTestId("edit-facility-btn")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("edit-facility-btn"));
+
+      const textarea = screen.getByTestId("edit-facility-description-input");
+      fireEvent.change(textarea, {
+        target: { value: "Updated championship-standard courts with new LED floodlighting." },
+      });
+
+      fireEvent.click(screen.getByTestId("edit-facility-submit-btn"));
+
+      await waitFor(() => {
+        expect(vi.mocked(api.updateFacility)).toHaveBeenCalledWith(
+          "demo-badminton-court",
+          expect.objectContaining({
+            description: "Updated championship-standard courts with new LED floodlighting.",
+          })
+        );
+      });
+
+      expect(
+        screen.getByText("Updated championship-standard courts with new LED floodlighting.")
+      ).toBeInTheDocument();
     });
   });
 });

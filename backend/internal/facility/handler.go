@@ -40,6 +40,29 @@ type CreateScheduleRequest struct {
 	Audience  string `json:"audience"`
 }
 
+// CreateFacilityRequest defines the expected JSON payload for creating a new facility.
+type CreateFacilityRequest struct {
+	Name        string  `json:"name"`
+	Slug        *string `json:"slug,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Location    *string `json:"location,omitempty"`
+	Status      *string `json:"status,omitempty"`
+	StatusUntil *string `json:"statusUntil,omitempty"`
+	StatusNote  *string `json:"statusNote,omitempty"`
+	ReservedFor *string `json:"reservedFor,omitempty"`
+}
+
+// UpdateFacilityRequest defines the payload for updating facility attributes.
+type UpdateFacilityRequest struct {
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Location    *string `json:"location,omitempty"`
+	Status      *string `json:"status,omitempty"`
+	StatusUntil *string `json:"statusUntil,omitempty"`
+	StatusNote  *string `json:"statusNote,omitempty"`
+	ReservedFor *string `json:"reservedFor,omitempty"`
+}
+
 // Handler provides HTTP handlers for facility read and write endpoints.
 type Handler struct {
 	repo         Repository
@@ -88,6 +111,24 @@ func (h *Handler) RegisterScheduleCreateRoute(router fiber.Router, middleware ..
 	handlers = append(handlers, middleware...)
 	handlers = append(handlers, h.CreateSchedule)
 	router.Post("/facilities/:slug/schedules", handlers...)
+}
+
+// RegisterFacilityCreateRoute mounts the protected POST /facilities endpoint
+// preceded by the supplied middleware chain.
+func (h *Handler) RegisterFacilityCreateRoute(router fiber.Router, middleware ...fiber.Handler) {
+	handlers := make([]fiber.Handler, 0, len(middleware)+1)
+	handlers = append(handlers, middleware...)
+	handlers = append(handlers, h.CreateFacility)
+	router.Post("/facilities", handlers...)
+}
+
+// RegisterFacilityUpdateRoute mounts the protected PATCH /facilities/:slug endpoint
+// preceded by the supplied middleware chain.
+func (h *Handler) RegisterFacilityUpdateRoute(router fiber.Router, middleware ...fiber.Handler) {
+	handlers := make([]fiber.Handler, 0, len(middleware)+1)
+	handlers = append(handlers, middleware...)
+	handlers = append(handlers, h.UpdateFacility)
+	router.Patch("/facilities/:slug", handlers...)
 }
 
 // List handles GET /api/facilities.
@@ -141,6 +182,325 @@ func (h *Handler) GetBySlug(c *fiber.Ctx) error {
 			})
 		}
 		log.Printf("[ERROR] Facility detail query for %q failed: %v", slug, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Error: "internal server error",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(ToFacilityResponse(*fac))
+}
+
+// CreateFacility handles POST /api/facilities.
+// It requires an authenticated principal holding sports_director or super_admin role,
+// validates the request payload, and creates a new facility with an audit trail in a single transaction.
+func (h *Handler) CreateFacility(c *fiber.Ctx) error {
+	c.Set("Cache-Control", "no-store")
+	c.Set("Pragma", "no-cache")
+
+	// 1. Content-Type Check: Require application/json
+	ct := c.Get("Content-Type")
+	mediaType, _, _ := mime.ParseMediaType(ct)
+	if mediaType != "application/json" {
+		return c.Status(fiber.StatusUnsupportedMediaType).JSON(ErrorResponse{
+			Error: "unsupported media type: Content-Type must be application/json",
+		})
+	}
+
+	// 2. Body Size Bound
+	body := c.Body()
+	if len(body) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Error: "request body cannot be empty",
+		})
+	}
+	if len(body) > 8192 {
+		return c.Status(fiber.StatusRequestEntityTooLarge).JSON(ErrorResponse{
+			Error: "request body too large",
+		})
+	}
+
+	// 3. JSON Parsing with DisallowUnknownFields
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	var req CreateFacilityRequest
+	if err := dec.Decode(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Error: fmt.Sprintf("malformed request payload: %v", err),
+		})
+	}
+	if dec.More() {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Error: "malformed request payload: unexpected extra tokens after JSON object",
+		})
+	}
+
+	// 4. Map to domain input
+	var slug string
+	if req.Slug != nil {
+		slug = *req.Slug
+	}
+	var status OperationalStatus
+	if req.Status != nil && strings.TrimSpace(*req.Status) != "" {
+		status = OperationalStatus(strings.TrimSpace(*req.Status))
+	} else {
+		status = StatusActive
+	}
+
+	var statusUntil *time.Time
+	if req.StatusUntil != nil && strings.TrimSpace(*req.StatusUntil) != "" {
+		raw := strings.TrimSpace(*req.StatusUntil)
+		parsed, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			parsed, err = time.Parse("2006-01-02T15:04", raw)
+			if err != nil {
+				parsed, err = time.Parse("2006-01-02T15:04:05", raw)
+				if err != nil {
+					return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+						Error: fmt.Sprintf("invalid statusUntil timestamp: %v (expected ISO-8601 format)", err),
+					})
+				}
+			}
+		}
+		statusUntil = &parsed
+	}
+
+	input := CreateFacilityInput{
+		Name:        req.Name,
+		Slug:        slug,
+		Description: req.Description,
+		Status:      status,
+		StatusUntil: statusUntil,
+		StatusNote:  req.StatusNote,
+		ReservedFor: req.ReservedFor,
+	}
+
+	if err := input.Validate(); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Error: err.Error(),
+		})
+	}
+
+	// 5. Extract Actor ID from authenticated principal
+	principal, ok := authentication.GetPrincipal(c)
+	if !ok || principal == nil || principal.User == nil || principal.User.ID == uuid.Nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{
+			Error: "unauthorized: authentication required",
+		})
+	}
+
+	audit := AuditParams{
+		ActorID:   principal.User.ID,
+		IPAddress: c.IP(),
+		UserAgent: c.Get("User-Agent"),
+	}
+
+	// 6. Execute audited creation under bounded context deadline
+	ctx, cancel := requestContext(c, h.queryTimeout)
+	defer cancel()
+
+	created, err := h.repo.CreateFacilityWithAudit(ctx, input, audit)
+	if err != nil {
+		var valErr *FacilityValidationError
+		if errors.As(err, &valErr) || errors.Is(err, ErrFacilityValidation) || errors.Is(err, ErrInvalidInput) {
+			return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+				Error: err.Error(),
+			})
+		}
+
+		var dupErr *DuplicateFacilityError
+		if errors.As(err, &dupErr) || errors.Is(err, ErrDuplicateFacility) {
+			return c.Status(fiber.StatusConflict).JSON(ErrorResponse{
+				Error: dupErr.Error(),
+			})
+		}
+
+		if errors.Is(err, context.DeadlineExceeded) {
+			log.Printf("[WARN] Facility creation timed out after %s: %v", h.queryTimeout, err)
+			return c.Status(fiber.StatusServiceUnavailable).JSON(ErrorResponse{
+				Error: "service unavailable: request timed out",
+			})
+		}
+
+		log.Printf("[ERROR] Facility creation failed: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Error: "internal server error",
+		})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(ToFacilityResponse(*created))
+}
+
+// UpdateFacility handles PATCH /api/facilities/:slug.
+// It requires an authenticated principal holding sports_director or super_admin role,
+// validates the request payload, and executes the audited facility update in a single transaction.
+func (h *Handler) UpdateFacility(c *fiber.Ctx) error {
+	c.Set("Cache-Control", "no-store")
+	c.Set("Pragma", "no-cache")
+
+	// 1. Validate facility slug
+	rawSlug := c.Params("slug")
+	slug, err := url.PathUnescape(rawSlug)
+	if err != nil {
+		slug = rawSlug
+	}
+	slug = strings.TrimSpace(slug)
+	if slug == "" {
+		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+			Error: "facility not found",
+		})
+	}
+
+	// 2. Content-Type Check: Require application/json
+	ct := c.Get("Content-Type")
+	mediaType, _, _ := mime.ParseMediaType(ct)
+	if mediaType != "application/json" {
+		return c.Status(fiber.StatusUnsupportedMediaType).JSON(ErrorResponse{
+			Error: "unsupported media type: Content-Type must be application/json",
+		})
+	}
+
+	// 3. Body Size Bound
+	body := c.Body()
+	if len(body) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Error: "request body cannot be empty",
+		})
+	}
+	if len(body) > 8192 {
+		return c.Status(fiber.StatusRequestEntityTooLarge).JSON(ErrorResponse{
+			Error: "request body too large",
+		})
+	}
+
+	// 4. JSON Parsing
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	var req UpdateFacilityRequest
+	if err := dec.Decode(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Error: fmt.Sprintf("malformed request payload: %v", err),
+		})
+	}
+	if dec.More() {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Error: "malformed request payload: unexpected extra tokens after JSON object",
+		})
+	}
+
+	// 5. Build domain input
+	var opStatus *OperationalStatus
+	if req.Status != nil && strings.TrimSpace(*req.Status) != "" {
+		st := OperationalStatus(strings.TrimSpace(*req.Status))
+		opStatus = &st
+	}
+
+	var statusUntil *time.Time
+	var clearStatusUntil bool
+	if req.StatusUntil != nil {
+		raw := strings.TrimSpace(*req.StatusUntil)
+		if raw == "" {
+			clearStatusUntil = true
+		} else {
+			parsed, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				parsed, err = time.Parse("2006-01-02T15:04", raw)
+				if err != nil {
+					parsed, err = time.Parse("2006-01-02T15:04:05", raw)
+					if err != nil {
+						return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+							Error: fmt.Sprintf("invalid statusUntil timestamp: %v (expected ISO-8601 format)", err),
+						})
+					}
+				}
+			}
+			statusUntil = &parsed
+		}
+	}
+
+	var statusNote *string
+	var clearStatusNote bool
+	if req.StatusNote != nil {
+		trimmed := strings.TrimSpace(*req.StatusNote)
+		if trimmed == "" {
+			clearStatusNote = true
+		} else {
+			statusNote = &trimmed
+		}
+	}
+
+	var reservedFor *string
+	var clearReservedFor bool
+	if req.ReservedFor != nil {
+		trimmed := strings.TrimSpace(*req.ReservedFor)
+		if trimmed == "" {
+			clearReservedFor = true
+		} else {
+			reservedFor = &trimmed
+		}
+	}
+
+	// If status is being set to active, clear any previous statusUntil and reservedFor unless explicitly specified
+	if opStatus != nil && *opStatus == StatusActive {
+		clearStatusUntil = true
+		clearReservedFor = true
+	}
+
+	input := UpdateFacilityInput{
+		Name:             req.Name,
+		Description:      req.Description,
+		Status:           opStatus,
+		StatusUntil:      statusUntil,
+		ClearStatusUntil: clearStatusUntil,
+		StatusNote:       statusNote,
+		ClearStatusNote:  clearStatusNote,
+		ReservedFor:      reservedFor,
+		ClearReservedFor: clearReservedFor,
+	}
+
+	if err := input.Validate(); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Error: err.Error(),
+		})
+	}
+
+	// 6. Extract actor from authenticated principal
+	principal, ok := authentication.GetPrincipal(c)
+	if !ok || principal == nil || principal.User == nil || principal.User.ID == uuid.Nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{
+			Error: "unauthorized: authentication required",
+		})
+	}
+
+	audit := AuditParams{
+		ActorID:   principal.User.ID,
+		IPAddress: c.IP(),
+		UserAgent: c.Get("User-Agent"),
+	}
+
+	ctx, cancel := requestContext(c, h.queryTimeout)
+	defer cancel()
+
+	fac, err := h.repo.UpdateFacilityWithAudit(ctx, slug, input, audit)
+	if err != nil {
+		var notFoundErr *NotFoundError
+		if errors.As(err, &notFoundErr) || errors.Is(err, ErrNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+				Error: "facility not found",
+			})
+		}
+		var valErr *FacilityValidationError
+		if errors.As(err, &valErr) || errors.Is(err, ErrFacilityValidation) || errors.Is(err, ErrInvalidInput) {
+			return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+				Error: err.Error(),
+			})
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			log.Printf("[WARN] Facility update for %q timed out after %s: %v", slug, h.queryTimeout, err)
+			return c.Status(fiber.StatusServiceUnavailable).JSON(ErrorResponse{
+				Error: "service unavailable: request timed out",
+			})
+		}
+		log.Printf("[ERROR] Facility update for %q failed: %v", slug, err)
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Error: "internal server error",
 		})

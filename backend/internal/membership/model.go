@@ -29,6 +29,20 @@ const DefaultGymMembershipFeePaisa = int64(300_000)
 // Standard duration for a gym membership pass is exactly 30 days (720 hours).
 const PassDuration = 30 * 24 * time.Hour
 
+// GymMembershipPlan represents a configurable gym pass tier with editable fee, duration, and details.
+type GymMembershipPlan struct {
+	ID           uuid.UUID  `json:"id"`
+	PlanCode     string     `json:"planCode"`
+	Name         string     `json:"name"`
+	DurationDays int        `json:"durationDays"`
+	PricePaisa   int64      `json:"pricePaisa"`
+	IsActive     bool       `json:"isActive"`
+	Description  string     `json:"description"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	UpdatedAt    time.Time  `json:"updatedAt"`
+	UpdatedBy    *uuid.UUID `json:"updatedBy,omitempty"`
+}
+
 var (
 	ErrMembershipNotFound        = errors.New("membership not found")
 	ErrInvalidMembershipDates    = errors.New("invalid membership start or end time: start must precede end")
@@ -37,6 +51,9 @@ var (
 	ErrIdempotencyKeyRequired    = errors.New("idempotency key is required")
 	ErrDuplicatePurchase         = errors.New("duplicate membership purchase request")
 	ErrDatabase                  = errors.New("membership database error")
+	ErrInvalidPlanDuration       = errors.New("plan duration must be greater than zero days")
+	ErrNegativePlanFee           = errors.New("plan fee cannot be negative")
+	ErrPlanNotFound              = errors.New("gym membership plan not found")
 )
 
 // Membership represents a 30-day gym pass belonging to a user.

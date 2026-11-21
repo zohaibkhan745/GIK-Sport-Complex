@@ -8,7 +8,7 @@ Official sports facility booking, timings directory, and Director of Sports achi
 
 The **GIKI Sports Complex Portal** is designed to provide students, faculty, and administrative staff with a seamless digital platform for:
 1. **Sports & Court Timings**: View all 9 sports facilities with distinct student hours and faculty-dedicated priority slots.
-2. **Court Slot Reservation**: Instant, real-time booking for high-demand courts (Glass Padel Courts, Teakwood Badminton Hall, Glass-back Squash, Hard Tennis, Futsal Court, and more).
+2. **Court Slot Reservation**: Instant, real-time booking for high-demand courts (Padel, Badminton, Squash, Tennis, Futsal, and more).
 3. **Director of Sports Showcase**: A dedicated portal for the Director of Sports to publish tournament victories, HEC Intervarsity championship trophies, medals, and official campus sports notices.
 4. **Passes & Memberships**: Manage semester racquet club passes, gym/pool memberships, and priority court passes.
 
@@ -112,8 +112,40 @@ All endpoints return JSON and provide sub-millisecond response latency.
 ### 🏸 Facilities & Timings
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/facilities` | List all 9 sports facilities with operating hours, student timings, faculty priority slots, max players, and rules. |
-| `GET` | `/api/facilities/:id` | Retrieve specific facility details (e.g., `padel-court-1`, `badminton-indoor`, `squash-courts`). |
+| `GET` | `/api/facilities` | List all sports facilities with operating hours, student timings, faculty priority slots, status, and schedules. |
+| `GET` | `/api/facilities/:slug` | Retrieve specific facility details by URL slug (e.g., `gymnasium`, `table-tennis`, `padel`). |
+| `POST` | `/api/facilities` | **Director / Super Admin**: Create a new sports facility with auto/custom slug and audit logging. |
+| `PATCH` | `/api/facilities/:slug` | **Director / Super Admin**: Edit existing facility attributes (name, status, description) with audit trail. |
+| `POST` | `/api/facilities/:slug/schedules` | **Director / Super Admin**: Add a weekly operating window for a facility with audit logging. |
+| `PUT` | `/api/facilities/:slug/schedules/:id` | **Director / Super Admin**: Modify an existing operating schedule window with audit logging. |
+| `DELETE` | `/api/facilities/:slug/schedules/:id` | **Director / Super Admin**: Delete a weekly operating window with audit logging. |
+
+#### Example Create Facility Request:
+```http
+POST /api/facilities
+Content-Type: application/json
+Authorization: Session-based cookie auth (sports_director or super_admin)
+
+{
+  "name": "Squash Complex",
+  "slug": "squash-complex",
+  "status": "active",
+  "description": "Three ASB glass-backed squash courts with Junckers sprung beechwood flooring and electronic scoring."
+}
+```
+
+#### Example Update Facility Request:
+```http
+PATCH /api/facilities/squash-complex
+Content-Type: application/json
+Authorization: Session-based cookie auth (sports_director or super_admin)
+
+{
+  "name": "Main Squash Complex",
+  "status": "maintenance",
+  "description": "Under scheduled glass polishing and annual floor recoating until Monday."
+}
+```
 
 ---
 
@@ -187,16 +219,16 @@ Content-Type: application/json
 
 ---
 
-## 🏛️ GIKI Sports Facilities Included
+## 🏛️ Sports Facilities Included
 
-1. **GIKI Glass Padel Courts (Court 1 & 2)**: Panoramic tempered glass, synthetic turf, 800 Lux LED tournament floodlights.
-2. **Indoor Badminton Championship Hall**: 4 BWF-certified teakwood sprung courts with climate cooling.
-3. **Glass-Back Squash Complex (Courts 1-3)**: Junckers beech flooring and electronic score monitors.
-4. **Hard Tennis Courts (Courts 1 & 2)**: US Open-grade acrylic cushioned hard courts.
-5. **GIKI Floodlit Futsal Court**: FIFA Quality artificial turf with rebound netting.
-6. **Table Tennis Hall**: 6 ITTF-approved Butterfly tournament tables.
-7. **GIKI Central Fitness & Strength Gym**: Olympic racks, cardio zone, functional rigs.
-8. **Semi-Olympic Swimming Pool**: 25-meter 6-lane temperature-controlled pool with ozone filtration.
+1. **Padel (Court 1 & 2)**: Panoramic tempered glass, synthetic turf, 800 Lux LED tournament floodlights.
+2. **Badminton**: 4 BWF-certified teakwood sprung courts with climate cooling.
+3. **Squash (Courts 1-3)**: Junckers beech flooring and electronic score monitors.
+4. **Tennis (Courts 1 & 2)**: US Open-grade acrylic cushioned hard courts.
+5. **Futsal**: FIFA Quality artificial turf with rebound netting.
+6. **Table Tennis**: 6 ITTF-approved Butterfly tournament tables.
+7. **Gymnasium**: Olympic racks, cardio zone, functional rigs.
+8. **Swimming Pool**: 25-meter 6-lane temperature-controlled pool with ozone filtration.
 
 ---
 

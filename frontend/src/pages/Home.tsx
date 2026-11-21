@@ -45,6 +45,14 @@ export function Home() {
     return cancel;
   }, [loadFacilities]);
 
+  const handleFacilityCreated = (newFacility: Facility) => {
+    setFacilities((prev) => {
+      // Avoid duplicate entry if loadFacilities runs concurrently
+      if (prev.some((f) => f.slug === newFacility.slug)) return prev;
+      return [...prev, newFacility];
+    });
+  };
+
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
@@ -55,6 +63,7 @@ export function Home() {
           isLoading={isLoading}
           error={error}
           onRetry={loadFacilities}
+          onFacilityCreated={handleFacilityCreated}
         />
         <AnnouncementsSection />
         <AchievementsSection />

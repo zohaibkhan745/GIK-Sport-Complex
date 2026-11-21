@@ -38,6 +38,18 @@ type Repository interface {
 	// recording a schedule.create audit log entry within a single atomic PostgreSQL transaction.
 	// If either step fails, the entire transaction rolls back.
 	CreateScheduleWithAudit(ctx context.Context, facilitySlug string, input CreateScheduleInput, audit AuditParams) (*Schedule, error)
+
+	// CreateFacilityWithAudit creates one new facility and records a facility.create audit log entry
+	// within a single atomic PostgreSQL transaction.
+	CreateFacilityWithAudit(ctx context.Context, input CreateFacilityInput, audit AuditParams) (*Facility, error)
+
+	// UpdateFacilityWithAudit updates an existing facility and records a facility.update audit log entry
+	// within a single atomic PostgreSQL transaction.
+	UpdateFacilityWithAudit(ctx context.Context, slug string, input UpdateFacilityInput, audit AuditParams) (*Facility, error)
+
+	// UpdateDescription updates the description of a facility by its URL slug.
+	// Returns ErrNotFound if no facility matches the given slug.
+	UpdateDescription(ctx context.Context, slug string, description *string) (*Facility, error)
 }
 
 // PostgresRepository implements Repository using a PostgreSQL connection pool.
@@ -70,8 +82,10 @@ func (r *PostgresRepository) List(ctx context.Context) ([]Facility, error) {
 			slug, 
 			name, 
 			description, 
-			location, 
 			status, 
+			status_until,
+			status_note,
+			reserved_for,
 			created_at, 
 			updated_at
 		FROM giki_sports.facilities
@@ -89,7 +103,7 @@ func (r *PostgresRepository) List(ctx context.Context) ([]Facility, error) {
 
 	for rows.Next() {
 		var f Facility
-		var desc, loc *string
+		var desc *string
 		var statusStr string
 
 		err := rows.Scan(
@@ -97,8 +111,10 @@ func (r *PostgresRepository) List(ctx context.Context) ([]Facility, error) {
 			&f.Slug,
 			&f.Name,
 			&desc,
-			&loc,
 			&statusStr,
+			&f.StatusUntil,
+			&f.StatusNote,
+			&f.ReservedFor,
 			&f.CreatedAt,
 			&f.UpdatedAt,
 		)
@@ -107,7 +123,6 @@ func (r *PostgresRepository) List(ctx context.Context) ([]Facility, error) {
 		}
 
 		f.Description = desc
-		f.Location = loc
 		f.Status = OperationalStatus(statusStr)
 		f.Schedules = make([]Schedule, 0)
 
@@ -194,8 +209,10 @@ func (r *PostgresRepository) GetBySlug(ctx context.Context, slug string) (*Facil
 			slug, 
 			name, 
 			description, 
-			location, 
 			status, 
+			status_until,
+			status_note,
+			reserved_for,
 			created_at, 
 			updated_at
 		FROM giki_sports.facilities
@@ -203,7 +220,7 @@ func (r *PostgresRepository) GetBySlug(ctx context.Context, slug string) (*Facil
 	`
 
 	var f Facility
-	var desc, loc *string
+	var desc *string
 	var statusStr string
 
 	err := r.pool.QueryRow(ctx, getFacilityBySlugSQL, resolvedSlug).Scan(
@@ -211,8 +228,10 @@ func (r *PostgresRepository) GetBySlug(ctx context.Context, slug string) (*Facil
 		&f.Slug,
 		&f.Name,
 		&desc,
-		&loc,
 		&statusStr,
+		&f.StatusUntil,
+		&f.StatusNote,
+		&f.ReservedFor,
 		&f.CreatedAt,
 		&f.UpdatedAt,
 	)
@@ -224,7 +243,94 @@ func (r *PostgresRepository) GetBySlug(ctx context.Context, slug string) (*Facil
 	}
 
 	f.Description = desc
-	f.Location = loc
+	f.Status = OperationalStatus(statusStr)
+	f.Schedules = make([]Schedule, 0)
+
+	const getSchedulesForFacilitySQL = `
+		SELECT 
+			id, 
+			facility_id, 
+			day_of_week, 
+			to_char(start_time, 'HH24:MI:SS') AS start_time, 
+			to_char(end_time, 'HH24:MI:SS') AS end_time, 
+			audience, 
+			created_at, 
+			updated_at
+		FROM giki_sports.schedules
+		WHERE facility_id = $1
+		ORDER BY day_of_week ASC, start_time ASC, end_time ASC, audience ASC, id ASC;
+	`
+
+	sRows, err := r.pool.Query(ctx, getSchedulesForFacilitySQL, f.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get schedules for facility %q: %w", slug, err)
+	}
+	defer sRows.Close()
+
+	for sRows.Next() {
+		var s Schedule
+		err := sRows.Scan(
+			&s.ID,
+			&s.FacilityID,
+			&s.DayOfWeek,
+			&s.StartTime,
+			&s.EndTime,
+			&s.Audience,
+			&s.CreatedAt,
+			&s.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan schedule row for facility %q: %w", slug, err)
+		}
+
+		f.Schedules = append(f.Schedules, s)
+	}
+	if err := sRows.Err(); err != nil {
+		return nil, fmt.Errorf("schedule rows iteration error: %w", err)
+	}
+
+	return &f, nil
+}
+
+// UpdateDescription updates the facility description for the given slug.
+// If the slug does not exist, returns ErrNotFound.
+func (r *PostgresRepository) UpdateDescription(ctx context.Context, slug string, description *string) (*Facility, error) {
+	resolvedSlug := resolveFacilitySlug(slug)
+	const updateFacilityDescSQL = `
+		UPDATE giki_sports.facilities
+		SET description = $1, updated_at = NOW()
+		WHERE slug = $2
+		RETURNING 
+			id, 
+			slug, 
+			name, 
+			description, 
+			status, 
+			created_at, 
+			updated_at;
+	`
+
+	var f Facility
+	var desc *string
+	var statusStr string
+
+	err := r.pool.QueryRow(ctx, updateFacilityDescSQL, description, resolvedSlug).Scan(
+		&f.ID,
+		&f.Slug,
+		&f.Name,
+		&desc,
+		&statusStr,
+		&f.CreatedAt,
+		&f.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &NotFoundError{Slug: slug}
+		}
+		return nil, fmt.Errorf("failed to update facility description for slug %q: %w", slug, err)
+	}
+
+	f.Description = desc
 	f.Status = OperationalStatus(statusStr)
 	f.Schedules = make([]Schedule, 0)
 
@@ -889,4 +995,411 @@ func (r *PostgresRepository) CreateScheduleWithAudit(
 	}
 
 	return &s, nil
+}
+
+// CreateFacilityWithAudit creates one new facility, recording a facility.create audit log entry
+// within a single atomic PostgreSQL transaction.
+func (r *PostgresRepository) CreateFacilityWithAudit(
+	ctx context.Context,
+	input CreateFacilityInput,
+	audit AuditParams,
+) (*Facility, error) {
+	if audit.ActorID == uuid.Nil {
+		return nil, errors.New("audit actor ID is required")
+	}
+
+	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin facility create transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	const insertFacilitySQL = `
+		INSERT INTO giki_sports.facilities (
+			slug,
+			name,
+			description,
+			status,
+			status_until,
+			status_note,
+			reserved_for,
+			created_at,
+			updated_at
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, now(), now()
+		)
+		RETURNING
+			id, slug, name, description, status, status_until, status_note, reserved_for, created_at, updated_at;
+	`
+
+	var f Facility
+	var desc *string
+	var statusStr string
+
+	err = tx.QueryRow(ctx, insertFacilitySQL,
+		input.Slug,
+		input.Name,
+		input.Description,
+		string(input.Status),
+		input.StatusUntil,
+		input.StatusNote,
+		input.ReservedFor,
+	).Scan(
+		&f.ID,
+		&f.Slug,
+		&f.Name,
+		&desc,
+		&statusStr,
+		&f.StatusUntil,
+		&f.StatusNote,
+		&f.ReservedFor,
+		&f.CreatedAt,
+		&f.UpdatedAt,
+	)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			if pgErr.Code == "23505" {
+				return nil, &DuplicateFacilityError{
+					Field: "slug",
+					Value: input.Slug,
+				}
+			}
+			if pgErr.Code == "23514" {
+				return nil, &FacilityValidationError{
+					Message: fmt.Sprintf("database check constraint failed: %s", pgErr.ConstraintName),
+				}
+			}
+		}
+		return nil, fmt.Errorf("failed to insert facility %q: %w", input.Slug, err)
+	}
+
+	f.Description = desc
+	f.Status = OperationalStatus(statusStr)
+	f.Schedules = make([]Schedule, 0)
+
+	// Step 2: Write audit log
+	detailsMap := map[string]interface{}{
+		"facility_id":   f.ID.String(),
+		"facility_slug": f.Slug,
+		"created_facility": map[string]interface{}{
+			"name":         f.Name,
+			"slug":         f.Slug,
+			"status":       string(f.Status),
+			"status_until": f.StatusUntil,
+			"status_note":  f.StatusNote,
+			"reserved_for": f.ReservedFor,
+			"description":  f.Description,
+		},
+	}
+	detailsJSON, err := json.Marshal(detailsMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal audit details: %w", err)
+	}
+
+	var ip *string
+	if trimmedIP := strings.TrimSpace(audit.IPAddress); trimmedIP != "" {
+		ip = &trimmedIP
+	}
+	var ua *string
+	if trimmedUA := strings.TrimSpace(audit.UserAgent); trimmedUA != "" {
+		ua = &trimmedUA
+	}
+
+	const insertAuditSQL = `
+		INSERT INTO giki_sports.audit_logs (
+			actor_id,
+			action,
+			target_type,
+			target_id,
+			details,
+			ip_address,
+			user_agent,
+			status,
+			created_at
+		) VALUES (
+			$1, 'facility.create', 'facility', $2, $3, $4, $5, 'SUCCESS', now()
+		);
+	`
+
+	_, err = tx.Exec(ctx, insertAuditSQL,
+		audit.ActorID,
+		f.ID,
+		detailsJSON,
+		ip,
+		ua,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write audit log for facility create: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit facility create and audit log transaction: %w", err)
+	}
+
+	return &f, nil
+}
+
+// UpdateFacilityWithAudit updates an existing facility and records a facility.update audit log entry
+// within a single atomic PostgreSQL transaction.
+func (r *PostgresRepository) UpdateFacilityWithAudit(
+	ctx context.Context,
+	slug string,
+	input UpdateFacilityInput,
+	audit AuditParams,
+) (*Facility, error) {
+	cleanSlug := resolveFacilitySlug(slug)
+	if cleanSlug == "" {
+		return nil, &NotFoundError{Slug: slug}
+	}
+
+	if audit.ActorID == uuid.Nil {
+		return nil, errors.New("audit actor ID is required")
+	}
+
+	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin facility update transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Step 1: Lock the facility row with FOR UPDATE
+	const selectExistingSQL = `
+		SELECT 
+			id,
+			slug,
+			name,
+			description,
+			status,
+			status_until,
+			status_note,
+			reserved_for,
+			created_at,
+			updated_at
+		FROM giki_sports.facilities
+		WHERE slug = $1
+		FOR UPDATE;
+	`
+
+	var oldFac Facility
+	var oldDesc *string
+	var oldStatus string
+
+	err = tx.QueryRow(ctx, selectExistingSQL, cleanSlug).Scan(
+		&oldFac.ID,
+		&oldFac.Slug,
+		&oldFac.Name,
+		&oldDesc,
+		&oldStatus,
+		&oldFac.StatusUntil,
+		&oldFac.StatusNote,
+		&oldFac.ReservedFor,
+		&oldFac.CreatedAt,
+		&oldFac.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &NotFoundError{Slug: slug}
+		}
+		return nil, fmt.Errorf("failed to lock facility %q for update: %w", slug, err)
+	}
+	oldFac.Description = oldDesc
+	oldFac.Status = OperationalStatus(oldStatus)
+
+	// Step 2: Build new values
+	newName := oldFac.Name
+	if input.Name != nil {
+		newName = *input.Name
+	}
+	newDesc := oldFac.Description
+	if input.Description != nil {
+		newDesc = input.Description
+	}
+	newStatus := string(oldFac.Status)
+	if input.Status != nil {
+		newStatus = string(*input.Status)
+	}
+	newStatusUntil := oldFac.StatusUntil
+	if input.StatusUntil != nil {
+		newStatusUntil = input.StatusUntil
+	} else if input.ClearStatusUntil {
+		newStatusUntil = nil
+	}
+	newStatusNote := oldFac.StatusNote
+	if input.StatusNote != nil {
+		newStatusNote = input.StatusNote
+	} else if input.ClearStatusNote {
+		newStatusNote = nil
+	}
+	newReservedFor := oldFac.ReservedFor
+	if input.ReservedFor != nil {
+		newReservedFor = input.ReservedFor
+	} else if input.ClearReservedFor {
+		newReservedFor = nil
+	}
+
+	const updateFacilitySQL = `
+		UPDATE giki_sports.facilities
+		SET 
+			name = $2,
+			description = $3,
+			status = $4,
+			status_until = $5,
+			status_note = $6,
+			reserved_for = $7,
+			updated_at = now()
+		WHERE id = $1
+		RETURNING
+			id, slug, name, description, status, status_until, status_note, reserved_for, created_at, updated_at;
+	`
+
+	var updatedFac Facility
+	var updDesc *string
+	var updStatus string
+
+	err = tx.QueryRow(ctx, updateFacilitySQL,
+		oldFac.ID,
+		newName,
+		newDesc,
+		newStatus,
+		newStatusUntil,
+		newStatusNote,
+		newReservedFor,
+	).Scan(
+		&updatedFac.ID,
+		&updatedFac.Slug,
+		&updatedFac.Name,
+		&updDesc,
+		&updStatus,
+		&updatedFac.StatusUntil,
+		&updatedFac.StatusNote,
+		&updatedFac.ReservedFor,
+		&updatedFac.CreatedAt,
+		&updatedFac.UpdatedAt,
+	)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			if pgErr.Code == "23514" {
+				return nil, &FacilityValidationError{
+					Message: fmt.Sprintf("database check constraint failed: %s", pgErr.ConstraintName),
+				}
+			}
+		}
+		return nil, fmt.Errorf("failed to update facility %q: %w", slug, err)
+	}
+	updatedFac.Description = updDesc
+	updatedFac.Status = OperationalStatus(updStatus)
+
+	// Step 3: Write audit log
+	detailsMap := map[string]interface{}{
+		"facility_slug": cleanSlug,
+		"facility_id":   updatedFac.ID.String(),
+		"old_values": map[string]interface{}{
+			"name":         oldFac.Name,
+			"status":       string(oldFac.Status),
+			"description":  oldFac.Description,
+			"status_until": oldFac.StatusUntil,
+			"status_note":  oldFac.StatusNote,
+			"reserved_for": oldFac.ReservedFor,
+		},
+		"new_values": map[string]interface{}{
+			"name":         updatedFac.Name,
+			"status":       string(updatedFac.Status),
+			"description":  updatedFac.Description,
+			"status_until": updatedFac.StatusUntil,
+			"status_note":  updatedFac.StatusNote,
+			"reserved_for": updatedFac.ReservedFor,
+		},
+	}
+	detailsJSON, err := json.Marshal(detailsMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal audit details: %w", err)
+	}
+
+	var ip *string
+	if trimmedIP := strings.TrimSpace(audit.IPAddress); trimmedIP != "" {
+		ip = &trimmedIP
+	}
+	var ua *string
+	if trimmedUA := strings.TrimSpace(audit.UserAgent); trimmedUA != "" {
+		ua = &trimmedUA
+	}
+
+	const insertAuditSQL = `
+		INSERT INTO giki_sports.audit_logs (
+			actor_id,
+			action,
+			target_type,
+			target_id,
+			details,
+			ip_address,
+			user_agent,
+			status,
+			created_at
+		) VALUES (
+			$1, 'facility.update', 'facility', $2, $3, $4, $5, 'SUCCESS', now()
+		);
+	`
+
+	_, err = tx.Exec(ctx, insertAuditSQL,
+		audit.ActorID,
+		updatedFac.ID,
+		detailsJSON,
+		ip,
+		ua,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write audit log for facility update: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit facility update and audit log transaction: %w", err)
+	}
+
+	// Fetch existing schedules for facility so complete model is returned
+	updatedFac.Schedules = make([]Schedule, 0)
+	const getSchedulesForFacilitySQL = `
+		SELECT 
+			id, 
+			facility_id, 
+			day_of_week, 
+			to_char(start_time, 'HH24:MI:SS') AS start_time, 
+			to_char(end_time, 'HH24:MI:SS') AS end_time, 
+			audience, 
+			created_at, 
+			updated_at
+		FROM giki_sports.schedules
+		WHERE facility_id = $1
+		ORDER BY day_of_week ASC, start_time ASC, end_time ASC, audience ASC, id ASC;
+	`
+	sRows, err := r.pool.Query(ctx, getSchedulesForFacilitySQL, updatedFac.ID)
+	if err == nil {
+		defer sRows.Close()
+		for sRows.Next() {
+			var s Schedule
+			if scanErr := sRows.Scan(
+				&s.ID,
+				&s.FacilityID,
+				&s.DayOfWeek,
+				&s.StartTime,
+				&s.EndTime,
+				&s.Audience,
+				&s.CreatedAt,
+				&s.UpdatedAt,
+			); scanErr == nil {
+				updatedFac.Schedules = append(updatedFac.Schedules, s)
+			}
+		}
+	}
+
+	return &updatedFac, nil
 }

@@ -14,24 +14,27 @@ type PublicContentResponse struct {
 	Kind        string    `json:"kind"`
 	Title       string    `json:"title"`
 	Content     string    `json:"content"`
+	ImageURLs   []string  `json:"imageUrls"`
 	PublishedAt time.Time `json:"publishedAt"`
 }
 
 // CreateDraftRequest defines the JSON payload for creating a new draft content item.
-// Incomplete drafts are valid; title and content may be omitted or null.
+// Incomplete drafts are valid; title, content, and imageUrls may be omitted or null.
 // Unexpected fields (e.g. actor, status, published_at) are strictly rejected.
 type CreateDraftRequest struct {
-	Kind    string  `json:"kind"`
-	Title   *string `json:"title"`
-	Content *string `json:"content"`
+	Kind      string   `json:"kind"`
+	Title     *string  `json:"title"`
+	Content   *string  `json:"content"`
+	ImageURLs []string `json:"imageUrls,omitempty"`
 }
 
-// UpdateDraftRequest defines the JSON payload for updating an existing draft's title and content.
-// PUT replaces both fields; omitted or null values clear that field (set to NULL in storage).
+// UpdateDraftRequest defines the JSON payload for updating an existing draft's title, content, and images.
+// PUT replaces fields; omitted or null values clear that field.
 // Preserves kind, creator, and creation time.
 type UpdateDraftRequest struct {
-	Title   *string `json:"title"`
-	Content *string `json:"content"`
+	Title     *string  `json:"title"`
+	Content   *string  `json:"content"`
+	ImageURLs []string `json:"imageUrls,omitempty"`
 }
 
 // DraftResponse represents the administrative JSON response for an internal content draft.
@@ -40,6 +43,7 @@ type DraftResponse struct {
 	Kind        string     `json:"kind"`
 	Title       *string    `json:"title"`
 	Content     *string    `json:"content"`
+	ImageURLs   []string   `json:"imageUrls"`
 	Status      string     `json:"status"`
 	CreatorID   uuid.UUID  `json:"creatorId"`
 	CreatedAt   time.Time  `json:"createdAt"`
@@ -66,11 +70,16 @@ type ErrorResponse struct {
 
 // ToPublicContentResponse converts a domain PublishedItem into an external PublicContentResponse DTO.
 func ToPublicContentResponse(item PublishedItem) PublicContentResponse {
+	imgs := item.ImageURLs
+	if imgs == nil {
+		imgs = []string{}
+	}
 	return PublicContentResponse{
 		ID:          item.ID,
 		Kind:        string(item.Kind),
 		Title:       item.Title,
 		Content:     item.Content,
+		ImageURLs:   imgs,
 		PublishedAt: item.PublishedAt,
 	}
 }
@@ -87,11 +96,16 @@ func ToPublicContentResponses(items []PublishedItem) []PublicContentResponse {
 
 // ToDraftResponse converts a domain Draft into an external DraftResponse DTO.
 func ToDraftResponse(d Draft) DraftResponse {
+	imgs := d.ImageURLs
+	if imgs == nil {
+		imgs = []string{}
+	}
 	return DraftResponse{
 		ID:          d.ID,
 		Kind:        string(d.Kind),
 		Title:       d.Title,
 		Content:     d.Content,
+		ImageURLs:   imgs,
 		Status:      d.Status,
 		CreatorID:   d.CreatorID,
 		CreatedAt:   d.CreatedAt,

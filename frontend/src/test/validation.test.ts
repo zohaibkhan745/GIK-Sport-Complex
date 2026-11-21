@@ -43,7 +43,6 @@ describe("Facility & Schedule Runtime Validation", () => {
     slug: "demo-badminton-court",
     name: "[Demo] Campus Badminton Court",
     description: "Synthetic test description",
-    location: "Wing B",
     status: "active",
     schedules: [validSchedule],
   };
@@ -76,11 +75,10 @@ describe("Facility & Schedule Runtime Validation", () => {
     expect(parseFacility(validFacility)).toEqual(validFacility);
   });
 
-  it("accepts null description and null location", () => {
+  it("accepts null description", () => {
     const nullableFacility = {
       ...validFacility,
       description: null,
-      location: null,
     };
     expect(isFacility(nullableFacility)).toBe(true);
     expect(parseFacility(nullableFacility)).toEqual(nullableFacility);
@@ -89,6 +87,18 @@ describe("Facility & Schedule Runtime Validation", () => {
   it("rejects facilities with invalid operational status", () => {
     expect(isFacility({ ...validFacility, status: "open" })).toBe(false);
     expect(isFacility({ ...validFacility, status: "available" })).toBe(false);
+  });
+
+  it("accepts facilities with 'reserved' status and time-bound metadata", () => {
+    const reservedFacility: Facility = {
+      ...validFacility,
+      status: "reserved",
+      reservedFor: "ACM Hackathon",
+      statusUntil: "2026-11-20T18:00:00Z",
+      statusNote: "Reopening after 18:00",
+    };
+    expect(isFacility(reservedFacility)).toBe(true);
+    expect(parseFacility(reservedFacility)).toEqual(reservedFacility);
   });
 
   it("rejects facilities with non-array schedules", () => {
@@ -116,15 +126,15 @@ describe("Facility & Schedule Runtime Validation", () => {
 });
 
 describe("Schedule Time Formatting", () => {
-  it("formats standard daytime windows without Date parsing", () => {
-    expect(formatTimeRange("09:00:00", "12:00:00")).toBe("09:00 – 12:00");
-    expect(formatTimeRange("16:00:00", "18:00:00")).toBe("16:00 – 18:00");
+  it("formats standard daytime windows in 12-hour AM/PM format", () => {
+    expect(formatTimeRange("09:00:00", "12:00:00")).toBe("9:00 AM – 12:00 PM");
+    expect(formatTimeRange("16:00:00", "18:00:00")).toBe("4:00 PM – 6:00 PM");
   });
 
-  it("preserves end-time 24:00:00 as midnight end-of-day without wrap-around", () => {
+  it("preserves end-time 24:00:00 as midnight end-of-day in 12-hour AM/PM format", () => {
     const result = formatTimeRange("22:00:00", "24:00:00");
-    expect(result).toBe("22:00 – 24:00 (Midnight)");
-    expect(result).not.toContain("00:00");
+    expect(result).toBe("10:00 PM – 12:00 AM (Midnight)");
+    expect(result).not.toContain("24:00:00");
   });
 });
 
@@ -307,6 +317,18 @@ describe("Public Content Item Runtime Validation (Step 10K)", () => {
   it("validates a conforming published content item", () => {
     expect(isPublicContentItem(validPublishedItem)).toBe(true);
     expect(parsePublicContentItem(validPublishedItem)).toEqual(validPublishedItem);
+
+    // Also conforms with optional imageUrls array
+    const withImages: PublicContentItem = {
+      ...validPublishedItem,
+      imageUrls: ["/uploads/photo1.jpg", "/uploads/photo2.webp"],
+    };
+    expect(isPublicContentItem(withImages)).toBe(true);
+    expect(parsePublicContentItem(withImages)).toEqual(withImages);
+
+    // Rejects invalid imageUrls type
+    expect(isPublicContentItem({ ...validPublishedItem, imageUrls: "not-an-array" })).toBe(false);
+    expect(isPublicContentItem({ ...validPublishedItem, imageUrls: [123] })).toBe(false);
   });
 
   it("rejects non-object or null values", () => {

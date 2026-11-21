@@ -109,6 +109,7 @@ func (f *fakeContentRepo) CreateDraft(ctx context.Context, input content.CreateD
 		Kind:      input.Kind,
 		Title:     input.Title,
 		Content:   input.Content,
+		ImageURLs: content.SanitizeImageURLs(input.ImageURLs),
 		Status:    "draft",
 		CreatorID: audit.ActorID,
 		CreatedAt: time.Now().UTC(),
@@ -160,6 +161,7 @@ func (f *fakeContentRepo) UpdateDraft(ctx context.Context, id uuid.UUID, input c
 
 	d.Title = input.Title
 	d.Content = input.Content
+	d.ImageURLs = content.SanitizeImageURLs(input.ImageURLs)
 	d.UpdatedAt = time.Now().UTC()
 	return d, nil
 }
@@ -195,6 +197,7 @@ func (f *fakeContentRepo) PublishDraft(ctx context.Context, id uuid.UUID, audit 
 		Kind:        d.Kind,
 		Title:       *d.Title,
 		Content:     *d.Content,
+		ImageURLs:   d.ImageURLs,
 		PublishedAt: now,
 	}, nil
 }
@@ -506,6 +509,7 @@ func TestHandler_NoInternalFieldsExposed(t *testing.T) {
 		"kind":        true,
 		"title":       true,
 		"content":     true,
+		"imageUrls":   true,
 		"publishedAt": true,
 	}
 

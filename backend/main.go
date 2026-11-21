@@ -175,7 +175,7 @@ func (s *Store) seedDefaultData() {
 	s.Data.Facilities = []Facility{
 		{
 			ID:                   "padel-court-1",
-			Name:                 "GIKI Glass Padel Court 1",
+			Name:                 "Padel Court 1",
 			Category:             "Racquet",
 			Description:          "State-of-the-art panoramic tempered glass court with high-grade synthetic turf and anti-glare LED tournament lighting.",
 			Location:             "Sports Complex, Outdoor Courts North",
@@ -191,7 +191,7 @@ func (s *Store) seedDefaultData() {
 		},
 		{
 			ID:                   "padel-court-2",
-			Name:                 "GIKI Glass Padel Court 2",
+			Name:                 "Padel Court 2",
 			Category:             "Racquet",
 			Description:          "Tournament standard court configured for doubles & singles match play with spectator seating deck.",
 			Location:             "Sports Complex, Outdoor Courts North",
@@ -207,7 +207,7 @@ func (s *Store) seedDefaultData() {
 		},
 		{
 			ID:                   "badminton-indoor",
-			Name:                 "Indoor Badminton Championship Hall",
+			Name:                 "Badminton",
 			Category:             "Indoor",
 			Description:          "Four BWF-certified teakwood sprung courts with shock absorption, climate cooling, and spectator gallery.",
 			Location:             "Indoor Sports Hall, Level 1",
@@ -223,7 +223,7 @@ func (s *Store) seedDefaultData() {
 		},
 		{
 			ID:                   "squash-courts",
-			Name:                 "Glass-Back Squash Complex (Courts 1-3)",
+			Name:                 "Squash",
 			Category:             "Racquet",
 			Description:          "Three glass-back competition squash courts with Junckers Beech flooring and electronic scoring monitors.",
 			Location:             "Sports Complex, West Wing Ground Floor",
@@ -239,7 +239,7 @@ func (s *Store) seedDefaultData() {
 		},
 		{
 			ID:                   "tennis-synthetic",
-			Name:                 "Hard Tennis Courts (Courts 1 & 2)",
+			Name:                 "Tennis",
 			Category:             "Outdoor",
 			Description:          "Two US Open-grade acrylic cushioned hard courts with high-mast LED night lighting.",
 			Location:             "Campus South Perimeter Sports Ground",
@@ -255,7 +255,7 @@ func (s *Store) seedDefaultData() {
 		},
 		{
 			ID:                   "futsal-court",
-			Name:                 "GIKI Floodlit Futsal Court",
+			Name:                 "Futsal",
 			Category:             "Outdoor",
 			Description:          "FIFA Quality certified artificial turf pitch with side rebound netting and digital score display.",
 			Location:             "Sports Complex Central Courtyard",
@@ -271,7 +271,7 @@ func (s *Store) seedDefaultData() {
 		},
 		{
 			ID:                   "table-tennis",
-			Name:                 "Table Tennis Hall (6 Tables)",
+			Name:                 "Table Tennis",
 			Category:             "Indoor",
 			Description:          "Equipped with 6 ITTF approved Butterfly Centrefold 25 tournament tables with tournament lighting.",
 			Location:             "Indoor Complex, Mezzanine Hall",
@@ -287,7 +287,7 @@ func (s *Store) seedDefaultData() {
 		},
 		{
 			ID:                   "gymnasium",
-			Name:                 "GIKI Central Fitness & Strength Gym",
+			Name:                 "Gymnasium",
 			Category:             "Fitness",
 			Description:          "Comprehensive weightlifting zone, Olympic squat racks, cardiovascular treadmills, ellipticals, and functional trainer rigs.",
 			Location:             "Sports Complex, Ground Floor East",
@@ -303,7 +303,7 @@ func (s *Store) seedDefaultData() {
 		},
 		{
 			ID:                   "swimming-pool",
-			Name:                 "GIKI Semi-Olympic Swimming Pool",
+			Name:                 "Swimming Pool",
 			Category:             "Aquatics",
 			Description:          "25-meter 6-lane temperature-controlled pool with ozone filtration and certified lifeguards on duty.",
 			Location:             "Aquatic Center, Sports Complex",
@@ -326,7 +326,7 @@ func (s *Store) seedDefaultData() {
 		{
 			ID:               "BK-10492",
 			FacilityID:       "padel-court-1",
-			FacilityName:     "GIKI Glass Padel Court 1",
+			FacilityName:     "Padel Court 1",
 			Date:             today,
 			TimeSlot:         "18:00 - 19:00",
 			BookerType:       "student",
@@ -342,7 +342,7 @@ func (s *Store) seedDefaultData() {
 		{
 			ID:               "BK-10493",
 			FacilityID:       "padel-court-1",
-			FacilityName:     "GIKI Glass Padel Court 1",
+			FacilityName:     "Padel Court 1",
 			Date:             today,
 			TimeSlot:         "19:00 - 20:00",
 			BookerType:       "faculty",
@@ -358,7 +358,7 @@ func (s *Store) seedDefaultData() {
 		{
 			ID:               "BK-10494",
 			FacilityID:       "badminton-indoor",
-			FacilityName:     "Indoor Badminton Championship Hall",
+			FacilityName:     "Badminton",
 			Date:             today,
 			TimeSlot:         "17:00 - 18:00",
 			BookerType:       "student",
@@ -374,7 +374,7 @@ func (s *Store) seedDefaultData() {
 		{
 			ID:               "BK-10495",
 			FacilityID:       "squash-courts",
-			FacilityName:     "Glass-Back Squash Complex (Courts 1-3)",
+			FacilityName:     "Squash",
 			Date:             tomorrow,
 			TimeSlot:         "18:00 - 19:00",
 			BookerType:       "student",
@@ -537,8 +537,12 @@ func main() {
 		AllowOrigins:     corsOrigins,
 		AllowCredentials: true,
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Director-Key",
-		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
+		AllowMethods:     "GET, POST, PUT, PATCH, DELETE, OPTIONS",
 	}))
+
+	// Ensure uploads directory exists and mount static route for content media
+	_ = os.MkdirAll("./uploads", 0755)
+	app.Static("/uploads", "./uploads")
 
 	// Static, Health & Readiness
 	api := app.Group("/api")
@@ -601,6 +605,16 @@ func main() {
 		authentication.RequireAnyRole(user.RoleSportsDirector, user.RoleSuperAdmin),
 	)
 	facilityHandler.RegisterScheduleCreateRoute(api,
+		authHandler.RequireTrustedOrigin(),
+		authHandler.RequireAuth(),
+		authentication.RequireAnyRole(user.RoleSportsDirector, user.RoleSuperAdmin),
+	)
+	facilityHandler.RegisterFacilityCreateRoute(api,
+		authHandler.RequireTrustedOrigin(),
+		authHandler.RequireAuth(),
+		authentication.RequireAnyRole(user.RoleSportsDirector, user.RoleSuperAdmin),
+	)
+	facilityHandler.RegisterFacilityUpdateRoute(api,
 		authHandler.RequireTrustedOrigin(),
 		authHandler.RequireAuth(),
 		authentication.RequireAnyRole(user.RoleSportsDirector, user.RoleSuperAdmin),

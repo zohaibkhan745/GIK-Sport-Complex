@@ -210,10 +210,10 @@ func TestSeedDemo_PreservesAdministratorEdits(t *testing.T) {
 	}
 
 	// Simulate administrator edits:
-	// 1. Rename facility name & location
+	// 1. Rename facility name & description
 	_, err := pool.Exec(ctx, `
 		UPDATE giki_sports.facilities 
-		SET name = '[Custom] Main Badminton Arena', location = 'Renovated East Wing'
+		SET name = '[Custom] Main Badminton Arena', description = 'Renovated facility with upgraded flooring'
 		WHERE slug = 'demo-badminton-court';
 	`)
 	if err != nil {
@@ -273,8 +273,8 @@ func TestSeedDemo_PreservesAdministratorEdits(t *testing.T) {
 	if fac.Name != "[Custom] Main Badminton Arena" {
 		t.Errorf("expected name to be preserved as '[Custom] Main Badminton Arena', got: %q", fac.Name)
 	}
-	if fac.Location == nil || *fac.Location != "Renovated East Wing" {
-		t.Errorf("expected location to be preserved as 'Renovated East Wing', got: %v", fac.Location)
+	if fac.Description == nil || *fac.Description != "Renovated facility with upgraded flooring" {
+		t.Errorf("expected description to be preserved as 'Renovated facility with upgraded flooring', got: %v", fac.Description)
 	}
 
 	// 2. Schedules must not be overwritten or recreated:
@@ -307,8 +307,8 @@ func TestSeedDemo_UnrelatedFacilityUntouched(t *testing.T) {
 	// Insert an unrelated facility with a schedule
 	unrelatedID := uuid.MustParse("11111111-1111-4111-8111-111111111111")
 	_, err := pool.Exec(ctx, `
-		INSERT INTO giki_sports.facilities (id, slug, name, description, location, status)
-		VALUES ($1, 'olympic-pool', 'Campus Olympic Pool', 'Standard pool', 'Aquatic Center', 'active');
+		INSERT INTO giki_sports.facilities (id, slug, name, description, status)
+		VALUES ($1, 'olympic-pool', 'Campus Olympic Pool', 'Standard pool', 'active');
 	`, unrelatedID)
 	if err != nil {
 		t.Fatalf("failed to insert unrelated facility: %v", err)

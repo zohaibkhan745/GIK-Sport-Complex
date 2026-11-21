@@ -81,6 +81,7 @@ func (r *PostgresRepository) ListPublishedByKind(ctx context.Context, kind Kind)
 			kind, 
 			title, 
 			content, 
+			image_urls,
 			published_at
 		FROM giki_sports.content_items
 		WHERE kind = $1
@@ -105,9 +106,13 @@ func (r *PostgresRepository) ListPublishedByKind(ctx context.Context, kind Kind)
 			&kindStr,
 			&item.Title,
 			&item.Content,
+			&item.ImageURLs,
 			&item.PublishedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan published %s row: %w", kind, err)
+		}
+		if item.ImageURLs == nil {
+			item.ImageURLs = []string{}
 		}
 		item.Kind = Kind(kindStr)
 		items = append(items, item)
@@ -201,19 +206,21 @@ func (r *PostgresRepository) CreateDraft(
 			kind,
 			title,
 			content,
+			image_urls,
 			status,
 			creator_id,
 			published_at,
 			created_at,
 			updated_at
 		) VALUES (
-			$1, $2, $3, 'draft', $4, NULL, now(), now()
+			$1, $2, $3, $4, 'draft', $5, NULL, now(), now()
 		)
 		RETURNING 
 			id,
 			kind,
 			title,
 			content,
+			image_urls,
 			status,
 			creator_id,
 			created_at,
@@ -227,12 +234,14 @@ func (r *PostgresRepository) CreateDraft(
 		string(input.Kind),
 		input.Title,
 		input.Content,
+		SanitizeImageURLs(input.ImageURLs),
 		audit.ActorID,
 	).Scan(
 		&d.ID,
 		&kindStr,
 		&d.Title,
 		&d.Content,
+		&d.ImageURLs,
 		&d.Status,
 		&d.CreatorID,
 		&d.CreatedAt,
@@ -279,6 +288,7 @@ func (r *PostgresRepository) GetDraftByID(ctx context.Context, id uuid.UUID) (*D
 			kind,
 			title,
 			content,
+			image_urls,
 			status,
 			creator_id,
 			created_at,
@@ -295,6 +305,7 @@ func (r *PostgresRepository) GetDraftByID(ctx context.Context, id uuid.UUID) (*D
 		&kindStr,
 		&d.Title,
 		&d.Content,
+		&d.ImageURLs,
 		&d.Status,
 		&d.CreatorID,
 		&d.CreatedAt,
@@ -308,6 +319,10 @@ func (r *PostgresRepository) GetDraftByID(ctx context.Context, id uuid.UUID) (*D
 		return nil, fmt.Errorf("failed to get draft %s: %w", id, err)
 	}
 
+	if d.ImageURLs == nil {
+		d.ImageURLs = []string{}
+	}
+
 	if d.Status != "draft" {
 		return nil, &NotADraftError{ID: id, Status: d.Status}
 	}
@@ -316,7 +331,7 @@ func (r *PostgresRepository) GetDraftByID(ctx context.Context, id uuid.UUID) (*D
 	return &d, nil
 }
 
-// UpdateDraft updates title and content of an existing draft and writes a content.draft.update audit log
+// UpdateDraft updates title, content, and optional image_urls of an existing draft and writes a content.draft.update audit log
 // within a single atomic PostgreSQL transaction.
 // Enforces the draft condition in the write itself.
 func (r *PostgresRepository) UpdateDraft(
@@ -347,14 +362,16 @@ func (r *PostgresRepository) UpdateDraft(
 		SET 
 			title = $1,
 			content = $2,
+			image_urls = $3,
 			updated_at = now()
-		WHERE id = $3
+		WHERE id = $4
 		  AND status = 'draft'
 		RETURNING 
 			id,
 			kind,
 			title,
 			content,
+			image_urls,
 			status,
 			creator_id,
 			created_at,
@@ -367,12 +384,14 @@ func (r *PostgresRepository) UpdateDraft(
 	err = tx.QueryRow(ctx, updateDraftSQL,
 		input.Title,
 		input.Content,
+		SanitizeImageURLs(input.ImageURLs),
 		id,
 	).Scan(
 		&d.ID,
 		&kindStr,
 		&d.Title,
 		&d.Content,
+		&d.ImageURLs,
 		&d.Status,
 		&d.CreatorID,
 		&d.CreatedAt,
@@ -488,7 +507,7 @@ func (r *PostgresRepository) PublishDraft(
 	}
 
 	// Step 4: Update status to published, assigning published_at and updated_at server-side.
-	// Preserves ID, kind, creator, title, and body.
+	// Preserves ID, kind, creator, title, body, and image_urls.
 	const updatePublishSQL = `
 		UPDATE giki_sports.content_items
 		SET 
@@ -502,6 +521,7 @@ func (r *PostgresRepository) PublishDraft(
 			kind,
 			title,
 			content,
+			image_urls,
 			published_at;
 	`
 
@@ -512,6 +532,7 @@ func (r *PostgresRepository) PublishDraft(
 		&pubKindStr,
 		&pubItem.Title,
 		&pubItem.Content,
+		&pubItem.ImageURLs,
 		&pubItem.PublishedAt,
 	)
 	if err != nil {
@@ -524,6 +545,9 @@ func (r *PostgresRepository) PublishDraft(
 			}
 		}
 		return nil, fmt.Errorf("failed to transition draft %s to published: %w", id, err)
+	}
+	if pubItem.ImageURLs == nil {
+		pubItem.ImageURLs = []string{}
 	}
 	pubItem.Kind = Kind(pubKindStr)
 

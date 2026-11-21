@@ -33,3 +33,14 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Sub-repositories and external services
+giki-wallet/
+
+# Large binary documents
+*.pdf
+
+# Documentation directory
+docs/
+
+

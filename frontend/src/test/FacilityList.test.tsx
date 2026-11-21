@@ -21,7 +21,6 @@ describe("Facility List / Home Component", () => {
       slug: "demo-badminton-court",
       name: "[Demo] Campus Badminton Court",
       description: "Demonstration indoor court",
-      location: "Sports Complex Wing B",
       status: "active",
       schedules: [
         {
@@ -38,7 +37,6 @@ describe("Facility List / Home Component", () => {
       slug: "demo-table-tennis",
       name: "[Demo] Table Tennis Hall",
       description: null,
-      location: null,
       status: "maintenance",
       schedules: [],
     },

@@ -14,9 +14,8 @@ func CampusFacilityFixtures() []FacilityFixture {
 		{
 			ID:          uuid.MustParse("c0000001-0000-4000-8000-000000000001"),
 			Slug:        "glass-padel-courts",
-			Name:        "GIKI Glass Padel Courts",
+			Name:        "Padel Court",
 			Description: strPtr("Panoramic tempered glass, synthetic turf, and 800 Lux LED tournament floodlights across two championship-grade courts. Online slot booking available."),
-			Location:    strPtr("Sports Complex, Outdoor Courts North"),
 			Status:      "active",
 			Schedules: []ScheduleFixture{
 				{
@@ -73,9 +72,8 @@ func CampusFacilityFixtures() []FacilityFixture {
 		{
 			ID:          uuid.MustParse("c0000002-0000-4000-8000-000000000002"),
 			Slug:        "central-fitness-gym",
-			Name:        "GIKI Central Fitness & Strength Gym",
+			Name:        "Gym",
 			Description: strPtr("Comprehensive campus fitness facility housing both the New Gym (premium Olympic lifting and cardio suite; 30-day membership pass required) and Old Gym (open student conditioning room; free walk-in access for all students)."),
-			Location:    strPtr("Sports Complex, Ground Floor East"),
 			Status:      "active",
 			Schedules: []ScheduleFixture{
 				{
@@ -160,9 +158,8 @@ func CampusFacilityFixtures() []FacilityFixture {
 		{
 			ID:          uuid.MustParse("c0000003-0000-4000-8000-000000000003"),
 			Slug:        "badminton-championship-hall",
-			Name:        "Indoor Badminton Championship Hall",
+			Name:        "Badminton Courts",
 			Description: strPtr("Four BWF-certified teakwood sprung courts with climate cooling, built to host championship-standard play year-round."),
-			Location:    strPtr("Indoor Sports Hall, Level 1"),
 			Status:      "active",
 			Schedules: []ScheduleFixture{
 				{
@@ -212,9 +209,8 @@ func CampusFacilityFixtures() []FacilityFixture {
 		{
 			ID:          uuid.MustParse("c0000004-0000-4000-8000-000000000004"),
 			Slug:        "glass-back-squash-complex",
-			Name:        "Glass-Back Squash Complex",
+			Name:        "Squash",
 			Description: strPtr("Three glass-back competition squash courts with Junckers beech flooring and electronic scoring monitors."),
-			Location:    strPtr("Sports Complex, West Wing Ground Floor"),
 			Status:      "active",
 			Schedules: []ScheduleFixture{
 				{
@@ -257,9 +253,8 @@ func CampusFacilityFixtures() []FacilityFixture {
 		{
 			ID:          uuid.MustParse("c0000005-0000-4000-8000-000000000005"),
 			Slug:        "hard-tennis-courts",
-			Name:        "Hard Tennis Courts",
+			Name:        "Tennis Courts",
 			Description: strPtr("Two US Open-grade acrylic cushioned hard courts, resurfaced for consistent bounce and year-round play."),
-			Location:    strPtr("Campus South Perimeter Sports Ground"),
 			Status:      "active",
 			Schedules: []ScheduleFixture{
 				{
@@ -302,9 +297,8 @@ func CampusFacilityFixtures() []FacilityFixture {
 		{
 			ID:          uuid.MustParse("c0000006-0000-4000-8000-000000000006"),
 			Slug:        "floodlit-futsal-court",
-			Name:        "GIKI Floodlit Futsal Court",
+			Name:        "Outdoor BasketBall Court",
 			Description: strPtr("A floodlit, FIFA Quality artificial turf pitch with rebound netting, built for fast, physical five-a-side football."),
-			Location:    strPtr("Sports Complex Central Courtyard"),
 			Status:      "active",
 			Schedules: []ScheduleFixture{
 				{
@@ -340,9 +334,8 @@ func CampusFacilityFixtures() []FacilityFixture {
 		{
 			ID:          uuid.MustParse("c0000007-0000-4000-8000-000000000007"),
 			Slug:        "semi-olympic-swimming-pool",
-			Name:        "Semi-Olympic Swimming Pool",
+			Name:        "Swimming Pool",
 			Description: strPtr("A 25-meter, 6-lane temperature-controlled pool with ozone filtration, used for open swim, training, and galas."),
-			Location:    strPtr("Aquatic Pavilion, Sports Complex"),
 			Status:      "active",
 			Schedules: []ScheduleFixture{
 				{
@@ -392,9 +385,8 @@ func CampusFacilityFixtures() []FacilityFixture {
 		{
 			ID:          uuid.MustParse("c0000008-0000-4000-8000-000000000008"),
 			Slug:        "table-tennis-hall",
-			Name:        "Table Tennis Hall",
+			Name:        "Table Tennis",
 			Description: strPtr("Six ITTF-approved Butterfly tournament tables in a dedicated hall, open for casual play and club training alike."),
-			Location:    strPtr("Indoor Complex, Mezzanine Hall"),
 			Status:      "active",
 			Schedules: []ScheduleFixture{
 				{
@@ -437,6 +429,222 @@ func CampusFacilityFixtures() []FacilityFixture {
 					DayOfWeek: 6, // Sat
 					StartTime: "08:00:00",
 					EndTime:   "22:00:00",
+					Audience:  "general",
+				},
+			},
+		},
+		{
+			ID:          uuid.MustParse("c0000009-0000-4000-8000-000000000009"),
+			Slug:        "snooker",
+			Name:        "Snooker",
+			Description: strPtr("Championship-standard Riley full-size 12ft snooker tables with West of England Strachan cloth, tournament lighting, and cues available for students, faculty, and staff."),
+			Status:      "active",
+			Schedules: []ScheduleFixture{
+				{
+					ID:        uuid.MustParse("c0000009-0000-4000-8000-000000000091"),
+					DayOfWeek: 1, // Mon
+					StartTime: "10:00:00",
+					EndTime:   "17:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000009-0000-4000-8000-000000000092"),
+					DayOfWeek: 2, // Tue
+					StartTime: "10:00:00",
+					EndTime:   "17:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000009-0000-4000-8000-000000000093"),
+					DayOfWeek: 3, // Wed
+					StartTime: "10:00:00",
+					EndTime:   "17:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000009-0000-4000-8000-000000000094"),
+					DayOfWeek: 4, // Thu
+					StartTime: "10:00:00",
+					EndTime:   "17:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000009-0000-4000-8000-000000000095"),
+					DayOfWeek: 5, // Fri
+					StartTime: "10:00:00",
+					EndTime:   "17:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000009-0000-4000-8000-000000000096"),
+					DayOfWeek: 6, // Sat
+					StartTime: "10:00:00",
+					EndTime:   "22:00:00",
+					Audience:  "general",
+				},
+				{
+					ID:        uuid.MustParse("c0000009-0000-4000-8000-000000000097"),
+					DayOfWeek: 7, // Sun
+					StartTime: "10:00:00",
+					EndTime:   "22:00:00",
+					Audience:  "general",
+				},
+			},
+		},
+		{
+			ID:          uuid.MustParse("c0000010-0000-4000-8000-000000000010"),
+			Slug:        "indoor-basketball-court",
+			Name:        "Indoor BasketBall Court",
+			Description: strPtr("Full-size hardwood indoor basketball court equipped with competition glass backboards, sprung maple flooring, electronic scoreboard, and spectator stands."),
+			Status:      "active",
+			Schedules: []ScheduleFixture{
+				{
+					ID:        uuid.MustParse("c0000010-0000-4000-8000-000000000101"),
+					DayOfWeek: 1, // Mon
+					StartTime: "06:00:00",
+					EndTime:   "11:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000010-0000-4000-8000-000000000102"),
+					DayOfWeek: 3, // Wed
+					StartTime: "06:00:00",
+					EndTime:   "11:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000010-0000-4000-8000-000000000103"),
+					DayOfWeek: 5, // Fri
+					StartTime: "06:00:00",
+					EndTime:   "11:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000010-0000-4000-8000-000000000104"),
+					DayOfWeek: 1, // Mon
+					StartTime: "16:00:00",
+					EndTime:   "20:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000010-0000-4000-8000-000000000105"),
+					DayOfWeek: 3, // Wed
+					StartTime: "16:00:00",
+					EndTime:   "20:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000010-0000-4000-8000-000000000106"),
+					DayOfWeek: 5, // Fri
+					StartTime: "16:00:00",
+					EndTime:   "20:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000010-0000-4000-8000-000000000107"),
+					DayOfWeek: 2, // Tue
+					StartTime: "16:00:00",
+					EndTime:   "18:00:00",
+					Audience:  "women_only",
+				},
+				{
+					ID:        uuid.MustParse("c0000010-0000-4000-8000-000000000108"),
+					DayOfWeek: 4, // Thu
+					StartTime: "16:00:00",
+					EndTime:   "18:00:00",
+					Audience:  "women_only",
+				},
+				{
+					ID:        uuid.MustParse("c0000010-0000-4000-8000-000000000109"),
+					DayOfWeek: 6, // Sat
+					StartTime: "08:00:00",
+					EndTime:   "14:00:00",
+					Audience:  "general",
+				},
+				{
+					ID:        uuid.MustParse("c0000010-0000-4000-8000-000000000110"),
+					DayOfWeek: 7, // Sun
+					StartTime: "14:00:00",
+					EndTime:   "20:00:00",
+					Audience:  "general",
+				},
+			},
+		},
+		{
+			ID:          uuid.MustParse("c0000011-0000-4000-8000-000000000011"),
+			Slug:        "indoor-volleyball-court",
+			Name:        "Indoor VolleyBall Court",
+			Description: strPtr("Championship-standard indoor volleyball court with competition Taraflex sports flooring, adjustable net antennas, and spectator gallery."),
+			Status:      "active",
+			Schedules: []ScheduleFixture{
+				{
+					ID:        uuid.MustParse("c0000011-0000-4000-8000-000000000201"),
+					DayOfWeek: 1, // Mon
+					StartTime: "07:00:00",
+					EndTime:   "11:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000011-0000-4000-8000-000000000202"),
+					DayOfWeek: 3, // Wed
+					StartTime: "07:00:00",
+					EndTime:   "11:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000011-0000-4000-8000-000000000203"),
+					DayOfWeek: 5, // Fri
+					StartTime: "07:00:00",
+					EndTime:   "11:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000011-0000-4000-8000-000000000204"),
+					DayOfWeek: 1, // Mon
+					StartTime: "16:00:00",
+					EndTime:   "20:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000011-0000-4000-8000-000000000205"),
+					DayOfWeek: 3, // Wed
+					StartTime: "16:00:00",
+					EndTime:   "20:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000011-0000-4000-8000-000000000206"),
+					DayOfWeek: 5, // Fri
+					StartTime: "16:00:00",
+					EndTime:   "20:00:00",
+					Audience:  "student",
+				},
+				{
+					ID:        uuid.MustParse("c0000011-0000-4000-8000-000000000207"),
+					DayOfWeek: 2, // Tue
+					StartTime: "16:00:00",
+					EndTime:   "18:00:00",
+					Audience:  "women_only",
+				},
+				{
+					ID:        uuid.MustParse("c0000011-0000-4000-8000-000000000208"),
+					DayOfWeek: 4, // Thu
+					StartTime: "16:00:00",
+					EndTime:   "18:00:00",
+					Audience:  "women_only",
+				},
+				{
+					ID:        uuid.MustParse("c0000011-0000-4000-8000-000000000209"),
+					DayOfWeek: 6, // Sat
+					StartTime: "09:00:00",
+					EndTime:   "15:00:00",
+					Audience:  "general",
+				},
+				{
+					ID:        uuid.MustParse("c0000011-0000-4000-8000-000000000210"),
+					DayOfWeek: 7, // Sun
+					StartTime: "09:00:00",
+					EndTime:   "15:00:00",
 					Audience:  "general",
 				},
 			},

@@ -24,6 +24,8 @@ vi.mock("../api", () => {
       getMyGymMembership: vi.fn(),
       purchaseGymMembership: vi.fn(),
       getMyWallet: vi.fn(),
+      getGymMembershipPlan: vi.fn(),
+      updateGymMembershipPlan: vi.fn(),
     },
   };
 });
@@ -56,6 +58,15 @@ describe("Gym Membership Page Component (Phase 7 / Step 7C)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(api.getGymMembershipPlan).mockResolvedValue({
+      id: "plan-default",
+      planCode: "STANDARD_30_DAY",
+      name: "Standard Gym Membership",
+      durationDays: 30,
+      pricePaisa: 300000,
+      isActive: true,
+      description: "Olympic racks, specialized free weights, cardio machines, and functional rigs.",
+    });
   });
 
   // 1. Signed-out access
@@ -267,5 +278,113 @@ describe("Gym Membership Page Component (Phase 7 / Step 7C)", () => {
     });
 
     expect(screen.getByText("30-Day Standard")).toBeInTheDocument();
+  });
+
+  // 6. Sports Director Plan Editing
+  it("allows Sports Director to open edit modal and update pass fee and duration", async () => {
+    const mockDirectorUser: AuthUser = {
+      id: "usr-director-1",
+      email: "director@giki.test",
+      displayName: "Sports Director",
+      roles: ["sports_director"],
+    };
+
+    vi.mocked(api.me).mockResolvedValue(mockDirectorUser);
+    vi.mocked(api.getMyGymMembership).mockResolvedValue({
+      isActive: false,
+      daysRemaining: 0,
+      secondsRemaining: 0,
+      history: [],
+    });
+    vi.mocked(api.getMyWallet).mockResolvedValue(mockSufficientWallet);
+    vi.mocked(api.getGymMembershipPlan).mockResolvedValue({
+      id: "plan-1",
+      planCode: "STANDARD_30_DAY",
+      name: "Standard Gym Membership",
+      durationDays: 30,
+      pricePaisa: 300000,
+      isActive: true,
+      description: "Olympic racks and specialized free weights.",
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/membership"]}>
+        <AuthProvider>
+          <Routes>
+            <Route path="/membership" element={<Membership />} />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    // Verify edit button is visible for director
+    const editBtn = await screen.findByTestId("edit-plan-btn");
+    expect(editBtn).toBeInTheDocument();
+    fireEvent.click(editBtn);
+
+    // Verify modal opened
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Edit Gym Pass Settings")).toBeInTheDocument();
+
+    const nameInput = screen.getByLabelText(/Pass Title \/ Name/i);
+    const feeInput = screen.getByLabelText(/Membership Fee/i);
+    const durationInput = screen.getByLabelText(/Pass Validity Duration/i);
+
+    fireEvent.change(nameInput, { target: { value: "Premium Gym Pass" } });
+    fireEvent.change(feeInput, { target: { value: "3500" } });
+    fireEvent.change(durationInput, { target: { value: "45" } });
+
+    vi.mocked(api.updateGymMembershipPlan).mockResolvedValueOnce({
+      id: "plan-1",
+      planCode: "STANDARD_30_DAY",
+      name: "Premium Gym Pass",
+      durationDays: 45,
+      pricePaisa: 350000,
+      isActive: true,
+      description: "Olympic racks and specialized free weights.",
+    });
+
+    const saveBtn = screen.getByRole("button", { name: /Save Pass Settings/i });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(api.updateGymMembershipPlan).toHaveBeenCalledWith({
+        name: "Premium Gym Pass",
+        durationDays: 45,
+        pricePaisa: 350000,
+        description: "Olympic racks and specialized free weights.",
+      });
+    });
+
+    // Check updated pricing displayed
+    await waitFor(() => {
+      expect(screen.getByText(/Gym pass settings updated/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/45 days/i).length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // 7. Student cannot see edit button
+  it("does not display edit button for regular students", async () => {
+    vi.mocked(api.me).mockResolvedValue(mockStudentUser);
+    vi.mocked(api.getMyGymMembership).mockResolvedValue({
+      isActive: false,
+      daysRemaining: 0,
+      secondsRemaining: 0,
+      history: [],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/membership"]}>
+        <AuthProvider>
+          <Routes>
+            <Route path="/membership" element={<Membership />} />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("edit-plan-btn")).not.toBeInTheDocument();
+    });
   });
 });

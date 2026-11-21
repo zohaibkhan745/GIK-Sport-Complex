@@ -1,13 +1,17 @@
 package facility
 
+import "time"
+
 // FacilityResponse represents the public JSON response for a sports facility.
 type FacilityResponse struct {
 	ID          string             `json:"id"`
 	Slug        string             `json:"slug"`
 	Name        string             `json:"name"`
 	Description *string            `json:"description"`
-	Location    *string            `json:"location"`
 	Status      string             `json:"status"`
+	StatusUntil *string            `json:"statusUntil,omitempty"`
+	StatusNote  *string            `json:"statusNote,omitempty"`
+	ReservedFor *string            `json:"reservedFor,omitempty"`
 	Schedules   []ScheduleResponse `json:"schedules"`
 }
 
@@ -39,6 +43,7 @@ type ErrorResponse struct {
 
 // ToFacilityResponse converts a domain Facility into an external FacilityResponse DTO.
 // Ensures that Schedules is always a non-nil slice ([]).
+// If a non-active status had a statusUntil time that has elapsed, it resolves to "active".
 func ToFacilityResponse(f Facility) FacilityResponse {
 	schedules := make([]ScheduleResponse, 0, len(f.Schedules))
 	for _, s := range f.Schedules {
@@ -51,13 +56,31 @@ func ToFacilityResponse(f Facility) FacilityResponse {
 		})
 	}
 
+	effStatus := f.Status
+	var statusUntil *string
+	var statusNote *string
+	var reservedFor *string
+
+	if f.Status != StatusActive && f.StatusUntil != nil && !time.Now().Before(*f.StatusUntil) {
+		effStatus = StatusActive
+	} else {
+		if f.StatusUntil != nil {
+			formatted := f.StatusUntil.UTC().Format(time.RFC3339)
+			statusUntil = &formatted
+		}
+		statusNote = f.StatusNote
+		reservedFor = f.ReservedFor
+	}
+
 	return FacilityResponse{
 		ID:          f.ID.String(),
 		Slug:        f.Slug,
 		Name:        f.Name,
 		Description: f.Description,
-		Location:    f.Location,
-		Status:      string(f.Status),
+		Status:      string(effStatus),
+		StatusUntil: statusUntil,
+		StatusNote:  statusNote,
+		ReservedFor: reservedFor,
 		Schedules:   schedules,
 	}
 }

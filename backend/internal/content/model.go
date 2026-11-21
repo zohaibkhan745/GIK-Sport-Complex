@@ -19,6 +19,12 @@ const (
 // MaxTitleLength defines the maximum character length for content item titles (schema limit VARCHAR(255)).
 const MaxTitleLength = 255
 
+// MaxImagesPerItem defines the maximum number of images attached to a content item.
+const MaxImagesPerItem = 10
+
+// MaxImageURLLength defines the maximum length of an image URL.
+const MaxImageURLLength = 2048
+
 // MaxPublishedItemsPerKind defines the maximum number of items returned by ListPublishedByKind in a single query.
 const MaxPublishedItemsPerKind = 50
 
@@ -128,6 +134,38 @@ func validateDraftTitle(title *string) error {
 	return nil
 }
 
+// ValidateImageURLs checks that the image URL count and each URL length fall within limits.
+func ValidateImageURLs(urls []string) error {
+	if len(urls) > MaxImagesPerItem {
+		return &DraftValidationError{
+			Message: fmt.Sprintf("cannot attach more than %d images", MaxImagesPerItem),
+		}
+	}
+	for _, u := range urls {
+		if len(u) > MaxImageURLLength {
+			return &DraftValidationError{
+				Message: fmt.Sprintf("image URL exceeds maximum allowed length of %d characters", MaxImageURLLength),
+			}
+		}
+	}
+	return nil
+}
+
+// SanitizeImageURLs returns a clean, non-nil slice with empty strings filtered out.
+func SanitizeImageURLs(urls []string) []string {
+	if len(urls) == 0 {
+		return []string{}
+	}
+	clean := make([]string, 0, len(urls))
+	for _, u := range urls {
+		trimmed := u
+		if trimmed != "" {
+			clean = append(clean, trimmed)
+		}
+	}
+	return clean
+}
+
 // PublishedItem is the public read model for published announcements and achievements.
 // It exposes only public-facing fields and intentionally omits creator details,
 // internal mutation timestamps (created_at, updated_at), and draft state flags.
@@ -136,6 +174,7 @@ type PublishedItem struct {
 	Kind        Kind      `json:"kind"`
 	Title       string    `json:"title"`
 	Content     string    `json:"content"`
+	ImageURLs   []string  `json:"imageUrls"`
 	PublishedAt time.Time `json:"publishedAt"`
 }
 
@@ -147,6 +186,7 @@ type Draft struct {
 	Kind        Kind       `json:"kind"`
 	Title       *string    `json:"title"`
 	Content     *string    `json:"content"`
+	ImageURLs   []string   `json:"imageUrls"`
 	Status      string     `json:"status"`
 	CreatorID   uuid.UUID  `json:"creatorId"`
 	CreatedAt   time.Time  `json:"createdAt"`
@@ -167,9 +207,10 @@ type DraftSummary struct {
 
 // CreateDraftInput contains parameters for creating a new draft content item.
 type CreateDraftInput struct {
-	Kind    Kind
-	Title   *string
-	Content *string
+	Kind      Kind
+	Title     *string
+	Content   *string
+	ImageURLs []string
 }
 
 // Validate verifies input parameters for draft creation.
@@ -177,17 +218,24 @@ func (in CreateDraftInput) Validate() error {
 	if err := ValidateKind(in.Kind); err != nil {
 		return err
 	}
+	if err := ValidateImageURLs(in.ImageURLs); err != nil {
+		return err
+	}
 	return validateDraftTitle(in.Title)
 }
 
 // UpdateDraftInput contains parameters for updating an existing draft's title and body.
 type UpdateDraftInput struct {
-	Title   *string
-	Content *string
+	Title     *string
+	Content   *string
+	ImageURLs []string
 }
 
 // Validate verifies input parameters for draft update.
 func (in UpdateDraftInput) Validate() error {
+	if err := ValidateImageURLs(in.ImageURLs); err != nil {
+		return err
+	}
 	return validateDraftTitle(in.Title)
 }
 

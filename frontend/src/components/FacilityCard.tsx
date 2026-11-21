@@ -39,6 +39,10 @@ export function FacilityCard({ facility }: { facility: Facility }) {
       label: "Active",
       badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
     },
+    reserved: {
+      label: "Reserved",
+      badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
+    },
     maintenance: {
       label: "Maintenance",
       badgeClass: "bg-amber-50 text-amber-700 border-amber-200",
@@ -93,6 +97,18 @@ export function FacilityCard({ facility }: { facility: Facility }) {
         {accessModel === "gym" && (
           <p className="mt-1 text-[11px] font-medium text-[var(--color-navy-soft)]">
             New Gym (Pass) &bull; Old Gym (Free)
+          </p>
+        )}
+
+        {facility.status === "reserved" && facility.reservedFor && (
+          <p className="mt-1 text-[11px] font-medium text-purple-700 truncate">
+            Reserved for: {facility.reservedFor}
+          </p>
+        )}
+
+        {facility.status !== "active" && facility.statusNote && (
+          <p className="mt-1 text-[11px] text-gray-500 line-clamp-1">
+            {facility.statusNote}
           </p>
         )}
       </div>
